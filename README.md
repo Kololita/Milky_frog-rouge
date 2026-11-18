@@ -1,26 +1,28 @@
 # 奶蛙 · Milky Frog
 
-奶蛙是一款第三人称动作 Roguelike，使用 Three.js、Vite 和 Electron。当前版本为 **0.3.1**。进入练习场或新手教程熟悉操作，开始远征后可在地图上选择战斗、事件和休息点，也可以从竞技场单独挑战首领。
+《奶蛙》是一款第三人称动作 Roguelike。你将操控一只会挥拳、翻滚和捧腹大笑的奶蛙，在十五层远征中选择路线、收集装备，并在旅程终点挑战武士。
 
-## 开发
+**Windows x64 · v0.3.1**
 
-需要 Node.js 22.12 或更新版本。
+[下载安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.1/Naiwa-0.3.1-Setup-x64.exe) · [下载免安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.1/Naiwa-0.3.1-Windows-x64.zip) · [查看更新说明](https://github.com/Kololita/Milky_frog-rouge/releases/tag/v0.3.1)
 
-```sh
-npm ci
-npm run dev
-```
+## 你会玩到什么
 
-打开终端中的地址，默认是 http://127.0.0.1:5173/。运行 `npm run build` 生成网页构建。Windows x64 桌面版使用 `npm run package:win -- --publish never`，安装包和免安装 ZIP 输出到 `release/0.3.1/`。首次打包会下载并校验 Electron 运行时。
+- **读招与反击**：用翻滚避开重击，抓准时机完美格挡获得金光，或绕到敌人背后摔投。拳掌连击、跳跃下砸和蓄力光球适合不同的交战距离。
+- **一局一套配装**：从战利品中选装备，把不同形状的拳套、装甲、护符和技能拼进装配台。遇到休息点，可以补充血瓶、升级装配台或改造装备。
+- **各有打法的敌人**：在锅炉房利用冷却水对付灰烬司炉官，在石台躲避石槌守卫的拔锤地裂，在芦苇地观察武士的挥刀节奏。
 
-默认按键包括 WASD 移动、空格跳跃、Shift 疾跑或点按闪避、鼠标左键攻击、右键格挡、Q 锁定、R 喝药、I 装备、E 主动大笑。1 为金光技能，2 为装配技能，3 为大招。键位可在设置中修改。
+## 开始游玩
 
-## 协作入口
+安装版运行 EXE 后按提示安装。免安装版解压 ZIP 后打开「奶蛙.exe」。第一次玩可以从主菜单进入新手教程，也可以到练习场试招，或在竞技场直接挑战首领。
 
-- `src/` 存放玩法、输入、界面和场景代码，`desktop/` 存放 Electron 入口。
-- `public/` 存放实际运行的模型、纹理、动画和界面资源。
-- `assets-source/` 存放 Blender 源文件、低模和美术参考。导出的游戏模型放入 `public/models/`。武士的原始高模参考单独保存，仓库提供武士低模、可编辑的 Blender 文件和运行用 GLB。
-- `tools/` 存放制作、构建和验证脚本。依赖、缓存、预览输出和安装包由各自流程生成。
-- [代码结构](docs/代码结构.md)、[战斗数值](docs/战斗数值.md)、[怪物设计](docs/monsters/README.md)、[装备与掉落](docs/装备与掉落.md)、[装配台](docs/装配台.md)、[远征地图](docs/远征地图.md)、[模型同步](docs/模型同步.md) 和 [渲染与启动预热](docs/渲染与启动预热.md) 记录相应设计与实现。
+| 默认按键 | 操作 |
+| --- | --- |
+| WASD / 鼠标 | 移动 / 转动视角 |
+| 空格 / Shift | 跳跃 / 疾跑或点按闪避 |
+| 鼠标左键 / 右键 | 攻击 / 格挡 |
+| Q / R / I | 锁定敌人 / 使用血瓶 / 打开装备界面 |
+| 1 / 2 / 3 | 金光技能 / 装配技能 / 大招 |
+| E | 主动大笑，恢复绷住并减轻受到的伤害 |
 
-Windows 下载见 [GitHub Releases](https://github.com/Kololita/Milky_frog-rouge/releases)。
+可在游戏设置中修改键位。
