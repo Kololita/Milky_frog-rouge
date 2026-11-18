@@ -2,7 +2,7 @@ import {createHingeWorkshop} from './hinge-workshop.js';
 import * as THREE from 'three';
 import {ASSEMBLY_BOARDS} from './assembly-board.js';
 import {POTION_STATS} from './battle-values.js';
-export const REST_ACTIONS=[{id:'restock',label:'休息'},{id:'upgrade',label:'升级装配台'},{id:'hinges',label:'改装'}];
+export const REST_ACTIONS=[{id:'restock',label:'休息'},{id:'upgrade',label:'升级装配台'},{id:'equipment',label:'升级'}];
 export function createRestSite(scene,doc,{equipment=()=>null}={}){
  const group=new THREE.Group();group.name='林间休息处';group.visible=false;scene.add(group);
  const wood=new THREE.MeshStandardMaterial({color:'#88603d',roughness:.9}),dark=new THREE.MeshStandardMaterial({color:'#4d3929',roughness:1});
@@ -56,8 +56,8 @@ export function createRestSite(scene,doc,{equipment=()=>null}={}){
  const api={group,seat,get opened(){return opened;},open(current,onLeave){
   battle=current;leave=onLeave;opened=true;group.visible=true;if(screen)screen.hidden=false;
   options?.replaceChildren();for(const action of REST_ACTIONS){
-   if(!options)continue;const button=doc.createElement('button');button.type='button';button.textContent=action.label;
-   button.addEventListener('click',()=>{if(!opened||button.disabled)return;if(action.id==='upgrade'){chooseUpgrade();return;}if(action.id==='hinges'){workshop.open();return;}battle.refillPotions();button.disabled=true;updateCount();finish();});options.append(button);
+   if(!options)continue;const button=doc.createElement('button');button.type='button';button.textContent=action.label;if(action.id==='equipment')button.disabled=!workshop.canOpen('upgrade');
+   button.addEventListener('click',()=>{if(!opened||button.disabled)return;if(action.id==='upgrade'){chooseUpgrade();return;}if(action.id==='equipment'){workshop.open();return;}battle.refillPotions();button.disabled=true;updateCount();finish();});options.append(button);
   }
   updateCount();
  },close(){workshop.close();upgradeDialog?.close();opened=false;group.visible=false;if(screen)screen.hidden=true;leave=null;},update(camera,time){

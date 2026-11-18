@@ -1,6 +1,6 @@
 export const EQUIPMENT_DATA=[
   {id:'charm-empty-forge',slot:'charm',name:'无相玉',rarity:'gold',passives:{emptyForge:1}},
-  {id:'charm-artisan',slot:'charm',name:'百炼刻印',rarity:'gold',passives:{artisan:1}},
+  {id:'charm-artisan',slot:'charm',name:'百炼刻印',rarity:'gold',regen:5,passives:{artisan:1,vigor:1}},
   {
     "id": "fist-dawn",
     "slot": "gloves",

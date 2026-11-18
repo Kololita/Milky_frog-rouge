@@ -1,3 +1,4 @@
+import {deriveSeed,seededRandom} from './run-random.js';
 import {GOLD_SKILLS,DEFAULT_GOLD_SKILL} from './gold-skills.js';
 import {createHingeWorkshop} from './hinge-workshop.js';
 import {createImpactRing} from './impact-ring.js';
@@ -13,6 +14,7 @@ import {launchEnemyProjectiles} from './enemy-projectiles.js';
 import {createMirrorReflections} from './mirror-reflections.js';
 import {ENCOUNTERS as jumpEncounters} from './encounters.js';
 import {RUN_EVENTS as jumpEvents} from './run-events.js';
+import {NODE_LABELS} from './run-map.js';
 import {createTutorial,TUTORIAL_SECTIONS} from './tutorial.js';
 import {loadEnemyModels} from './enemy-models.js';
 import * as THREE from 'three';
@@ -218,6 +220,7 @@ let blockLastAttemptPerfect = true;
 let blockAttemptPerfect = false;
 let blockPerfectScale = 1;
 let lastGuardWindow;
+let blinkRandom=Math.random;
 let blinkCountdown = nextBlinkDelay();
 let menuOpenedAt=0;
 const homeScreen=document.getElementById?.('home-screen');
@@ -322,7 +325,12 @@ function enterArena(mode='practice',{run=false,floor=1}={}){
   if(!loaded)return;
   if(!run)runGame?.abandon();restSite.close();document.getElementById?.('app')?.classList.remove('on-map','on-rest');
   cameraOcclusion.clear();combatCamera.reset();
-  settings.close();battle.reset(mode,{floor});arenaView.setMode(mode);inPractice=true;if(homeScreen)homeScreen.hidden=true;document.getElementById?.('app')?.classList.remove('on-home');
+  settings.close();battle.reset(mode,{floor});
+  const mapRun=run?runGame?.run:null;
+  if(mapRun)for(const enemy of battle.enemies)enemy.seed=deriveSeed(mapRun.seedFor('enemy-ai'),enemy.id);
+  blinkRandom=mapRun?seededRandom(mapRun.seedFor('blink')):Math.random;
+  blinkCountdown=nextBlinkDelay(blinkRandom);
+  arenaView.setMode(mode);inPractice=true;if(homeScreen)homeScreen.hidden=true;document.getElementById?.('app')?.classList.remove('on-home');
   returnToOrigin();orbit.yaw=heading;updateCamera();
 }
 practiceButton?.addEventListener('click',()=>{equipmentMenu.sandbox();enterArena();});
@@ -351,6 +359,7 @@ for(const section of TUTORIAL_SECTIONS)document.getElementById(`tutorial-${secti
 const arenaMenu=createArenaMenu(document,{select:mode=>{equipmentMenu.sandbox({maxLevel:true});equipmentMenu.open({beforeBattle:true,onStart:()=>enterArena(mode)});}});
 let finishArtisan;
 const artisanWorkshop=createHingeWorkshop(document,{equipment:()=>equipmentMenu,finish:()=>finishArtisan?.(),dialogId:'artisan-workshop'});
+const shopWorkshop=createHingeWorkshop(document,{equipment:()=>equipmentMenu,dialogId:'shop-workshop'});
 runGame=createRunUI(document,{
   eventState:()=>({health:battle.player.health,maxHealth:battle.maxHealth,potions:battle.player.potions,capacity:battle.potionCapacity}),
   applyEvent:effect=>{battle.player.health=effect.health;battle.player.potions=effect.potions;if(effect.item)equipmentMenu.grant(effect.item,effect.roll);battleHUD.update(battle);},
@@ -361,20 +370,60 @@ runGame=createRunUI(document,{
   enterRest:leave=>openRestSite(leave),
   award:(item,roll)=>equipmentMenu.grant(item.id,roll),
   openInventory:()=>equipmentMenu.open(),
+  shopWorkshop,
   openArtisan(done){finishArtisan=done;return artisanWorkshop.open({onlyTrim:true});},
   onExit(){showHome();},
 });
 const developerEquipment=createDeveloperEquipment(document,{grant:(id,roll)=>{if(!equipmentMenu.debugGrant(id,roll))return false;const run=runGame?.run;if(run){if(!run.inventory.includes(id))run.inventory.push(id);if(roll)run.equipmentRolls[id]=roll;}return true;}});
 document.getElementById('developer-equipment-get').addEventListener('click',()=>{if(loaded)developerEquipment.open();});
 const jumpSelect=document.getElementById('developer-jump-target');
-const jumpEntries=[{label:'休息处',type:'rest'},...['elite','monster'].flatMap(type=>[...jumpEncounters.values()].filter(e=>e.kind===type).map(e=>({label:e.name??e.stats.name,type,encounter:e.id}))),...jumpEvents.map((e,eventIndex)=>({label:e.name,type:'event',eventIndex}))];
-for(const [type,label] of [['rest','休息处'],['elite','精英'],['monster','小怪'],['event','事件']]){
+const jumpEntries=[];
+for(const [type,label] of Object.entries(NODE_LABELS)){
  const group=document.createElement('optgroup');group.label=label;
- jumpEntries.forEach((entry,index)=>{if(entry.type!==type)return;const option=document.createElement('option');option.value=String(index);option.textContent=entry.label;group.append(option);});jumpSelect.append(group);
+ const encounters=[...jumpEncounters.values()].filter(encounter=>encounter.kind===type);
+ const choices=type==='event'
+  ?jumpEvents.map((event,eventIndex)=>({label:event.name,eventIndex}))
+  :encounters.map(encounter=>({label:encounter.name??encounter.stats.name,encounter:encounter.id}));
+ if(!choices.length)choices.push({label});
+ for(const choice of choices){
+  const option=document.createElement('option');option.value=String(jumpEntries.length);option.textContent=choice.label;
+  jumpEntries.push({type,...choice});group.append(option);
+ }
+ jumpSelect.append(group);
 }
 document.getElementById('developer-jump-go').addEventListener('click',()=>{if(!loaded)return;settings.close();equipmentMenu.close();tutorial.stop();restSite.close();clearInput();runGame.jump(jumpEntries[Number(jumpSelect.value)]);});
 
 document.getElementById?.('home-new-game')?.addEventListener('click',()=>{if(loaded)runGame?.start();});
+const customGameButton=document.getElementById('home-custom-game');
+const customGameDialog=document.getElementById('custom-game-dialog');
+const customGameForm=document.getElementById('custom-game-form');
+const customGameSeed=document.getElementById('custom-game-seed');
+const customGameError=document.getElementById('custom-game-error');
+function clearSeedError(){
+  customGameError.hidden=true;
+  customGameSeed.removeAttribute('aria-invalid');
+}
+customGameButton?.addEventListener('click',()=>{
+  if(!loaded)return;
+  customGameForm.reset();
+  clearSeedError();
+  customGameDialog.showModal();
+});
+document.getElementById('custom-game-cancel')?.addEventListener('click',()=>customGameDialog.close());
+customGameSeed?.addEventListener('input',clearSeedError);
+customGameDialog?.addEventListener('keydown',event=>event.stopPropagation());
+customGameForm?.addEventListener('submit',event=>{
+  event.preventDefault();
+  if(!loaded)return;
+  if(!customGameSeed.validity.valid){
+    customGameError.hidden=false;
+    customGameSeed.setAttribute('aria-invalid','true');
+    customGameSeed.focus();
+    return;
+  }
+  customGameDialog.close();
+  runGame.start(customGameSeed.value);
+});
 
 document.getElementById?.('potion-use')?.addEventListener('click',()=>{if(inPractice&&!settings.opened&&!equipmentMenu.opened)battle.usePotion();});
 
@@ -915,7 +964,7 @@ function triggerGesture(spec, capturedAim = undefined) {
     blink.reset().setEffectiveWeight(1).setEffectiveTimeScale(1).setLoop(THREE.LoopOnce, 1);
     blink.clampWhenFinished = false;
     blink.play();
-    blinkCountdown = nextBlinkDelay();
+    blinkCountdown = nextBlinkDelay(blinkRandom);
     return;
   }
   pivot = undefined;
@@ -1269,6 +1318,7 @@ async function loadPlayer() {
     const tutorialButton=document.getElementById("home-tutorial");if(tutorialButton)tutorialButton.disabled=false;
     if(practiceButton){practiceButton.disabled=false;practiceButton.textContent='练习场';}
     const newButton=document.getElementById?.('home-new-game');if(newButton)newButton.disabled=false;
+    if(customGameButton)customGameButton.disabled=false;
     arenaMenu.setReady();document.getElementById('developer-jump-go').disabled=false;document.getElementById('developer-equipment-get').disabled=false;
     if(!inPractice){orbit.yaw=Math.PI;updateCamera();}
     mixer.addEventListener('finished', event => {

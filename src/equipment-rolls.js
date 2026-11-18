@@ -37,7 +37,7 @@ export function resolveEquipment(id,roll,upgrade=null){
 export const equipmentDisplayInteger=n=>Math.floor(n+1e-9);
 const integer=equipmentDisplayInteger,signed=n=>`${n>=0?'+':''}${integer(n)}`;
 const PERCENT_STATS=new Set(['reduction','attackSpeed','energyGain','range','potionHeal']);
-export function upgradeStat(value,level,unit=1){for(let i=0;i<level;i++)value=Math.ceil(value*unit*1.25-1e-9)/unit;return value;}
+export function upgradeStat(value,level,unit=1){for(let i=0;i<level;i++)value=Math.ceil(value*unit*1.35-1e-9)/unit;return value;}
 export function equipmentSkillStats(item){
  const source=SKILL_STATS[item?.id];if(!source)return null;
  const result={...source},power=item.shapeMultiplier??1,level=item.skillUpgradeLevel??0;

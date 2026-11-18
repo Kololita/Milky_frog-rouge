@@ -22,7 +22,7 @@
         <div class="home-content"><h1>奶蛙</h1>
           <nav class="home-menu" aria-label="主菜单">
             <button id="home-new-game" class="home-primary" type="button" disabled>开始新游戏</button>
-            <button type="button" disabled>读取游戏 <small>即将开放</small></button>
+            <button id="home-custom-game" type="button" aria-haspopup="dialog" disabled>自定义游戏</button>
             <button id="home-practice" type="button" disabled>正在加载角色…</button>
             <button id="home-tutorial" type="button" disabled>新手教程</button>
             <button id="home-arena" type="button">竞技场 <small>Boss挑战</small></button>
@@ -31,6 +31,18 @@
           <div class="home-version"><b>0.3.1</b></div>
         </div>
       </section>
+      <dialog id="custom-game-dialog" aria-labelledby="custom-game-title">
+        <h2 id="custom-game-title">自定义游戏</h2>
+        <form id="custom-game-form" novalidate>
+          <label for="custom-game-seed">地图种子</label>
+          <input id="custom-game-seed" name="seed" type="text" inputmode="numeric" pattern="[0-9]{9}" placeholder="9 位数字" autocomplete="off" aria-describedby="custom-game-error" required autofocus />
+          <p id="custom-game-error" role="alert" hidden>请输入恰好 9 位数字。</p>
+          <div class="custom-game-actions">
+            <button id="custom-game-cancel" type="button">返回</button>
+            <button type="submit">生成地图</button>
+          </div>
+        </form>
+      </dialog>
       <dialog id="tutorial-directory" aria-labelledby="tutorial-directory-title"><div class="settings-heading"><h2 id="tutorial-directory-title">新手教程</h2><button id="tutorial-directory-close" type="button">返回</button></div><nav aria-label="教程分类"><button id="tutorial-basics" type="button">基础操作与机制</button><button id="tutorial-equipment" type="button">装备与装配</button><button id="tutorial-moves" type="button">招式大全</button></nav></dialog>
       <aside id="tutorial-panel" hidden aria-live="polite"><h2></h2><p></p><progress max="11" value="0"></progress><small>N 跳过此步 · Esc 返回主菜单</small></aside>
       <section id="run-screen" class="run-screen" hidden aria-label="远征地图">
@@ -53,6 +65,7 @@
       </section>
       <div id="battle-feed" class="battle-feed" aria-live="polite"></div>
       <div id="combo-damage" class="combo-damage" aria-label="本次连击累计伤害" hidden></div>
+      <output id="run-seed" aria-label="地图种子" hidden></output>
       <button id="settings-open" class="settings-open" type="button" aria-haspopup="dialog" aria-label="设置" title="设置 · Esc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l.6 2.4 2 .9 2.2-.7 3 5.2-1.7 1.8v2.1l1.7 1.8-3 5.2-2.2-.7-2 .9L15 24H9l-.6-2.4-2-.9-2.2.7-3-5.2L2.9 14v-2.1L1.2 10l3-5.2 2.2.7 2-.9z" transform="translate(1 -1) scale(.9)"/><circle cx="12" cy="11" r="3.2"/></svg></button>
       <dialog id="boss-arena-dialog" aria-labelledby="arena-title"><div class="settings-heading"><h2 id="arena-title">竞技场</h2><button id="arena-close" type="button" aria-label="关闭竞技场列表">返回</button></div><button id="home-samurai" type="button" disabled>武士 <small>困难 · 快慢刀</small></button><div id="arena-encounters"></div></dialog>
       <dialog id="settings-dialog" aria-labelledby="settings-title">
