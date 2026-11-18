@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {Battle} from '../src/battle.js';
+import {activeBuffs,createBuffStatus} from '../src/buff-status.js';
+const b=new Battle();assert.deepEqual(activeBuffs(b),[]);
+b.applyEquipment({armor:'armor-light',gloves:'fist-steel',charm:'charm-recovery',skill:'longarm'});
+let ids=()=>activeBuffs(b).map(buff=>buff.id);
+assert(!ids().includes('health'));assert(!ids().includes('attack'));assert(!ids().includes('regen'));assert(!ids().includes('shield'));
+b.player.energy=66;assert(b.beginSkill());assert(ids().includes('longarm'));assert(!ids().includes('attack'));assert(!ids().includes('energy-gain'));
+b.player.energyGainMultiplier=1.5;assert(ids().includes('energy-gain'));b.player.energyGainMultiplier=1;
+b.player.invulnerableUntil=5;b.breakLaugh={start:0,duration:6};assert(!ids().includes('invulnerable'));assert(!ids().includes('laugh-shield'));b.breakLaugh=null;
+b.time=30;assert(!ids().includes('longarm'));
+b.applyEquipment({armor:'armor-heavy',skill:'drain'});b.player.health=100;assert(b.beginSkill());assert(!ids().includes('shield'));assert(ids().includes('drain'));assert(!ids().includes('health'));
+b.player.rageUntil=b.time+9;assert(ids().includes('rage'));assert(ids().includes('haste'));assert(ids().includes('lifesteal'));
+class Element{constructor(){this.children=[];this.attributes={};}append(...elements){this.children.push(...elements);}replaceChildren(){this.children=[];}setAttribute(k,v){this.attributes[k]=v;}}
+const root=new Element(),doc={getElementById:()=>root,createElement:()=>new Element()};const view=createBuffStatus(doc);
+view.update(b);assert.equal(root.children.length,activeBuffs(b).length);const first=root.children[0];view.update(b);assert.equal(root.children[0],first,'Unchanged buffs rebuild every frame');
+assert(root.children.some(node=>node.children[1].textContent==='9'));
+b.player.health=0;view.update(b);assert(root.hidden);assert.equal(root.children.length,0);
+b.reset();view.update(b);assert(!ids().includes('shield'));assert(!ids().includes('drain'));assert(!ids().includes('rage'));
+console.log('BUFF_STATUS_VERIFIED: equipped effects, skill expiry, rage benefits, countdown, DOM reuse and death/reset cleanup');

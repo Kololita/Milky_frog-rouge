@@ -1,0 +1,3 @@
+import assert from 'node:assert/strict';
+import {createMonsterEffects} from '../src/monster-effects.js';
+const fx=createMonsterEffects('shellbug'),e={state:'windup',elapsed:1.2,telegraph:1.25,swingDuration:.3,move:{motion:'spikes',reach:1}};fx.animate(e,0,1,0,0);const spike=fx.root.getObjectByName('shellbug_spike_effect').children[0],before=spike.scale.y;e.elapsed=1.46;fx.animate(e,0,1,.7,0);assert(spike.scale.y>before*6);e.state='hurt';fx.animate(e,0,0,0,0);assert(!fx.root.getObjectByName('shellbug_spike_effect').visible);console.log('SPIKE_BURST_VERIFIED: small telegraph, full extension on damage frame, cleanup on interrupt');

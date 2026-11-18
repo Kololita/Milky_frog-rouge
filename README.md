@@ -19,7 +19,7 @@ npm run dev
 
 - `src/` 存放玩法、输入、界面和场景代码，`desktop/` 存放 Electron 入口。
 - `public/` 存放实际运行的模型、纹理、动画和界面资源。
-- `assets-source/` 存放 Blender 源文件、低模和美术参考。导出的游戏模型放入 `public/models/`。
+- `assets-source/` 存放 Blender 源文件、低模和美术参考。导出的游戏模型放入 `public/models/`。武士的原始高模参考单独保存，仓库提供武士低模、可编辑的 Blender 文件和运行用 GLB。
 - `tools/` 存放制作、构建和验证脚本。依赖、缓存、预览输出和安装包由各自流程生成。
 - [代码结构](docs/代码结构.md)、[战斗数值](docs/战斗数值.md)、[怪物设计](docs/monsters/README.md)、[装备与掉落](docs/装备与掉落.md)、[装配台](docs/装配台.md)、[远征地图](docs/远征地图.md)、[模型同步](docs/模型同步.md) 和 [渲染与启动预热](docs/渲染与启动预热.md) 记录相应设计与实现。
 

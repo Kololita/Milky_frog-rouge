@@ -1,0 +1,12 @@
+{
+  "source": "samurai.glb",
+  "target": "samurai_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 1.3861473347243523,
+  "loops": 55065,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}

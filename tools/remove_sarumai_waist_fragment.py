@@ -1,0 +1,3 @@
+import bpy,bmesh
+from pathlib import Path
+p=Path.cwd()/'assets-source/blender/sarumai.blend';bpy.ops.wm.open_mainfile(filepath=str(p));o=bpy.data.objects['samurai_body'];ev=o.evaluated_get(bpy.context.evaluated_depsgraph_get());m=ev.to_mesh();ids=[v.index for v in m.vertices if -.290<v.co.x<-.224 and -.050<v.co.y<.018 and 1.190<v.co.z<1.295];ev.to_mesh_clear();bm=bmesh.new();bm.from_mesh(o.data);bm.verts.ensure_lookup_table();bmesh.ops.delete(bm,geom=[bm.verts[i]for i in ids],context='VERTS');bm.to_mesh(o.data);bm.free();bpy.context.preferences.filepaths.save_version=0;bpy.ops.wm.save_as_mainfile(filepath=str(p));print('REMOVED_DETACHED_WAIST_FRAGMENT',len(ids))

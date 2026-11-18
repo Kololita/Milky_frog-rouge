@@ -1,0 +1,12 @@
+{
+  "source": "stonekeeper.glb",
+  "target": "stonekeeper_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 1.1107861039692577,
+  "loops": 38412,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}

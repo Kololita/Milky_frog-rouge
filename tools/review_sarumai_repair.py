@@ -1,0 +1,20 @@
+import bpy,math,sys
+from pathlib import Path
+from mathutils import Vector as V
+ROOT=Path.cwd();OUT=ROOT/'output/enemy-models'
+ids=sys.argv[sys.argv.index('--')+1:]if'--'in sys.argv else ['raider','mirrorGuard','stonekeeper','samurai']
+for name in ids:
+ bpy.ops.wm.read_factory_settings(use_empty=True);bpy.ops.import_scene.gltf(filepath=str(ROOT/f'public/models/enemies/{name}.glb'));scene=bpy.context.scene;scene.render.engine='CYCLES';scene.cycles.samples=16;scene.cycles.use_denoising=True;scene.render.resolution_x=1000;scene.render.resolution_y=1125;scene.render.resolution_percentage=100
+ rig=next(o for o in scene.objects if o.type=='ARMATURE')
+ for track in rig.animation_data.nla_tracks:track.mute=True
+ height={'samurai':2.25,'mirrorGuard':1.65,'spitter':1.25,'scythemoth':1.95,'raider':1.65,'stonekeeper':2.1}[name];center=V((0,0,1.65 if name=='samurai' else height*.56));scene.world=bpy.data.worlds.new('Studio');scene.world.use_nodes=True;scene.world.node_tree.nodes['Background'].inputs[0].default_value=(.12,.14,.17,1);scene.world.node_tree.nodes['Background'].inputs[1].default_value=.7
+ bpy.ops.mesh.primitive_plane_add(size=200);floor=bpy.context.object;mat=bpy.data.materials.new('Floor');mat.diffuse_color=(.17,.19,.21,1);floor.data.materials.append(mat)
+ for loc,power in [((2,-3,5),500),((-3,1,3),350)]:
+  bpy.ops.object.light_add(type='AREA',location=loc);o=bpy.context.object;o.data.energy=power;o.data.size=4;o.rotation_euler=(center-o.location).to_track_quat('-Z','Y').to_euler()
+ bpy.ops.object.camera_add();cam=bpy.context.object;scene.camera=cam;cam.data.type='ORTHO';cam.data.ortho_scale={'samurai':3.0,'mirrorGuard':2.5,'scythemoth':3.8,'raider':2.5,'stonekeeper':3.4,'spitter':2.2}[name]
+ for action in list(bpy.data.actions):
+  if action.name not in ['Idle']:continue
+  for phase in [0]:
+   rig.animation_data.action=action;rig.animation_data.action_slot=action.slots[0];frame=phase*scene.render.fps;scene.frame_set(int(frame),subframe=frame%1)
+   for view,offset in [('side',(4,-.15,.15)),('hands',(1.6,-4,.1))]:
+    cam.data.ortho_scale=1.35 if view=='hands' else 2.95;aim=V((0,0,1.45))if view=='hands'else V((0,0,1.25));cam.location=aim+V(offset);cam.rotation_euler=(aim-cam.location).to_track_quat('-Z','Y').to_euler();scene.render.filepath=str(OUT/f'hd-{name}-idle-{view}.png');bpy.ops.render.render(write_still=True)

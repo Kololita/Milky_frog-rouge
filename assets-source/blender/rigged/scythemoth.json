@@ -1,0 +1,16 @@
+{
+  "source": "scythemoth_low.glb",
+  "triangles": 10375,
+  "bones": 29,
+  "clips": [
+    "Idle",
+    "Walk",
+    "CutLeft",
+    "CutRight",
+    "Thrust",
+    "Pounce",
+    "Hurt",
+    "Death"
+  ],
+  "height": 1.95
+}

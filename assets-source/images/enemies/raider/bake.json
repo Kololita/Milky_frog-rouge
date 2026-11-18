@@ -1,0 +1,12 @@
+{
+  "source": "raider.glb",
+  "target": "raider_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 0.9587257760745331,
+  "loops": 36183,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}

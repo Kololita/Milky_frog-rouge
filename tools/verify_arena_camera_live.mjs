@@ -1,0 +1,1 @@
+import {gameFixture} from './game_fixture.mjs';const g=await gameFixture();g.read("battle.reset('samurai');arenaView.setMode('samurai');");g.tick(3);console.log('ARENA_CAMERA_INTEGRATION_OK',g.read('camera.position.toArray()'));

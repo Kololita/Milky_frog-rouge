@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#dce8e9" />
+    <title>奶蛙 · 0.3.1</title>
+  </head>
+  <body>
+    <main id="app" class="on-home">
+      <section id="startup-loading" aria-label="游戏加载">
+        <strong>奶蛙</strong>
+        <p id="startup-status" role="status">正在加载资源…</p>
+        <div class="startup-progress">
+          <progress id="startup-progress" value="0" max="100" aria-label="游戏加载进度"></progress>
+          <span id="startup-percent" aria-hidden="true">0%</span>
+        </div>
+      </section>
+      <canvas id="scene" aria-label="奶娃第三人称平地演示"></canvas>
+      <div id="rage-filter" class="rage-filter" aria-hidden="true"></div>
+      <section id="home-screen" class="home-screen" aria-label="开始界面">
+        <div class="home-content"><h1>奶蛙</h1>
+          <nav class="home-menu" aria-label="主菜单">
+            <button id="home-new-game" class="home-primary" type="button" disabled>开始新游戏</button>
+            <button type="button" disabled>读取游戏 <small>即将开放</small></button>
+            <button id="home-practice" type="button" disabled>正在加载角色…</button>
+            <button id="home-tutorial" type="button" disabled>新手教程</button>
+            <button id="home-arena" type="button">竞技场 <small>Boss挑战</small></button>
+            <button id="home-settings" type="button">设置</button>
+          </nav>
+          <div class="home-version"><b>0.3.1</b></div>
+        </div>
+      </section>
+      <dialog id="tutorial-directory" aria-labelledby="tutorial-directory-title"><div class="settings-heading"><h2 id="tutorial-directory-title">新手教程</h2><button id="tutorial-directory-close" type="button">返回</button></div><nav aria-label="教程分类"><button id="tutorial-basics" type="button">基础操作与机制</button><button id="tutorial-equipment" type="button">装备与装配</button><button id="tutorial-moves" type="button">招式大全</button></nav></dialog>
+      <aside id="tutorial-panel" hidden aria-live="polite"><h2></h2><p></p><progress max="11" value="0"></progress><small>N 跳过此步 · Esc 返回主菜单</small></aside>
+      <section id="run-screen" class="run-screen" hidden aria-label="远征地图">
+        <header class="run-header"><h1>远征地图</h1><span id="run-floor"></span><button id="run-exit" type="button">返回主菜单</button></header>
+        <div id="run-map-scroll"><div id="run-map-canvas"></div></div>
+      </section>
+      <dialog id="run-result"><h2 id="run-result-title"></h2><button id="run-result-next" type="button">下一层</button></dialog>
+      <dialog id="loot-dialog" aria-labelledby="loot-title"><div class="loot-heading"><button id="loot-inventory" type="button">背包</button><h2 id="loot-title">选择战利品</h2></div><div id="loot-choices"></div><button id="loot-confirm" type="button" disabled>确认</button></dialog>
+      <section id="rest-screen" class="rest-screen" hidden aria-label="休息处"><header><h1>休息处</h1><div id="rest-options"></div><span id="rest-potions"></span></header><button id="rest-leave" type="button">继续前进</button></section>
+      <section id="battle-hud" class="battle-hud" aria-label="战斗状态">
+        <div id="buff-status" class="buff-status" role="list" aria-label="增益效果" hidden></div>
+        <div class="meter-row detail-only"><span>生命</span><strong id="health-value"></strong></div>
+        <div id="player-health" class="battle-meter health" role="progressbar" aria-label="生命值" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i></i></div>
+        <div class="meter-row detail-only"><span>绷住</span><strong id="guard-value"></strong></div>
+        <div id="player-guard" class="battle-meter guard" role="progressbar" aria-label="绷住" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i></i></div>
+        <div id="energy-value" class="energy-value">能量 0 / 100 · 伤害 +0%</div>
+        <div id="player-energy" class="battle-meter energy" role="progressbar" aria-label="能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+        <button id="potion-use" type="button" class="potion-use" aria-label="使用血瓶" title="血瓶"><svg viewBox="0 0 32 36" aria-hidden="true"><path d="M11 2H21V10L26 17V30Q26 34 22 34H10Q6 34 6 30V17L11 10Z"/><path class="potion-liquid" d="M8 22H24V30Q24 32 21 32H11Q8 32 8 30Z"/><path d="M10 3H22M11 9H21"/></svg><span id="potion-count">6 / 6</span></button>
+        <div id="enemy-value" class="enemy-value detail-only"></div>
+      </section>
+      <div id="battle-feed" class="battle-feed" aria-live="polite"></div>
+      <div id="combo-damage" class="combo-damage" aria-label="本次连击累计伤害" hidden></div>
+      <button id="settings-open" class="settings-open" type="button" aria-haspopup="dialog" aria-label="设置" title="设置 · Esc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l.6 2.4 2 .9 2.2-.7 3 5.2-1.7 1.8v2.1l1.7 1.8-3 5.2-2.2-.7-2 .9L15 24H9l-.6-2.4-2-.9-2.2.7-3-5.2L2.9 14v-2.1L1.2 10l3-5.2 2.2.7 2-.9z" transform="translate(1 -1) scale(.9)"/><circle cx="12" cy="11" r="3.2"/></svg></button>
+      <dialog id="boss-arena-dialog" aria-labelledby="arena-title"><div class="settings-heading"><h2 id="arena-title">竞技场</h2><button id="arena-close" type="button" aria-label="关闭竞技场列表">返回</button></div><button id="home-samurai" type="button" disabled>武士 <small>困难 · 快慢刀</small></button><div id="arena-encounters"></div></dialog>
+      <dialog id="settings-dialog" aria-labelledby="settings-title">
+        <div class="settings-heading"><div><span class="eyebrow">PREFERENCES</span><h2 id="settings-title">游戏设置</h2></div><button id="settings-close" type="button">返回游戏 · Esc</button></div>
+        <form id="settings-form" onsubmit="return false">
+          <fieldset><legend>画面与性能</legend>
+            <label>渲染分辨率<select data-setting="resolution"><option value="native">自动 · 原生（最高2倍像素）</option><option value="1920x1080">1920 × 1080</option><option value="1600x900">1600 × 900</option><option value="1280x720">1280 × 720</option><option value="960x540">960 × 540</option></select></label>
+            <p class="settings-note">按窗口比例适配所选像素预算，保持画面比例。</p>
+            <label>垂直同步<input type="checkbox" checked disabled></label><p class="settings-note">由浏览器与显示器控制，网页无法强制关闭。帧率上限可单独调整。</p>
+            <label>帧率上限<select data-setting="fps"><option value="display">跟随显示器</option><option value="30">30 FPS</option><option value="60">60 FPS</option><option value="90">90 FPS</option><option value="120">120 FPS</option><option value="144">144 FPS</option></select></label>
+            <label>光照质量<select data-setting="lightingQuality"><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
+            <label>阴影质量<select data-setting="shadowQuality"><option value="off">关闭</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
+            <label>反射质量<select data-setting="reflectionQuality"><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></label>
+            <label>后处理质量<select data-setting="postQuality"><option value="off">关闭</option><option value="medium">中</option><option value="high">高</option></select></label>
+            <label>水体画质<select data-setting="waterQuality"><option value="low">性能</option><option value="high">高</option></select></label>
+            <label>画面亮度<input type="range" data-setting="brightness" min="0.7" max="1.6" step="0.05"></label>
+            <button id="settings-fullscreen" type="button">切换全屏</button>
+          </fieldset>
+          <fieldset><legend>镜头与界面</legend>
+            <label>镜头距离<select data-setting="camera"><option value="near">近</option><option value="medium">中</option><option value="far">远</option></select></label>
+            <label>鼠标灵敏度<input type="range" data-setting="sensitivity" min="0.25" max="2.5" step="0.05"></label>
+            <label>反转水平视角<input type="checkbox" data-setting="invert"></label>
+            <label>冲击镜头晃动<input type="checkbox" data-setting="shake"></label>
+            <label>显示UI程度<select data-setting="ui"><option value="none">无</option><option value="simple">简略</option><option value="detailed">详细</option></select></label>
+          </fieldset>
+          <fieldset class="bindings-field"><legend>键位调整</legend><p id="binding-message" class="settings-note">点击按键后输入新键；鼠标按键也可调整。</p><div id="key-bindings"></div></fieldset>
+          <fieldset class="developer-field"><legend>开发者模式</legend>
+            <label>启用参数面板<input id="developer-enabled" type="checkbox"></label>
+            <label>显示hitbox<input type="checkbox" data-setting="hitboxes"></label>
+            <button id="developer-equipment-get" type="button" disabled>获得装备</button>
+            <details id="developer-jump"><summary>跳转</summary><label>场景<select id="developer-jump-target"></select></label><button id="developer-jump-go" type="button" disabled>跳转</button></details>
+            <section id="developer-panel" hidden>
+              <p class="settings-note">拖动滑块调整参数，点击应用后保存并重置当前训练场。关闭面板不会撤销已应用参数。时间单位为秒，帧数以60帧/秒为准；角度使用弧度。开发参数保留小数便于精细调整。</p>
+              <input id="developer-search" type="search" placeholder="搜索参数，例如：攻击力、转向、Boss" aria-label="搜索开发参数">
+              <div id="developer-controls"></div>
+              <div class="developer-actions"><button id="developer-apply" type="button">应用参数并重置训练场</button><button id="developer-reset" type="button">恢复全部开发参数</button></div>
+              <p id="developer-message" class="settings-note" role="status">未调整的参数使用游戏默认值。</p>
+            </section>
+          </fieldset>
+        </form>
+        <div class="settings-bottom"><span>设置自动保存在本机 · v0.3.1</span><button id="return-home" type="button">返回主菜单</button><button id="settings-reset" type="button">恢复默认</button></div>
+      </dialog>
+      <section id="boss-hud" class="boss-hud" hidden aria-label="Boss战斗状态"><span id="boss-name"></span><div class="boss-health"><i id="boss-health-fill"></i></div></section>
+      <img id="skill-activation-icon" class="skill-activation-icon" alt="" hidden>
+      <dialog id="equipment-dialog" aria-labelledby="equipment-title">
+        <div class="settings-heading"><h2 id="equipment-title">装备</h2><button id="equipment-close" type="button">关闭 · Esc</button></div>
+        <div id="equipment-slots"></div>
+        <div class="equipment-layout">
+          <div class="assembly-workspace"><div class="assembly-surface"><div id="assembly-board" aria-label="装配台"></div><div id="assembly-pieces"></div></div><div id="assembly-status" role="status" aria-live="polite"></div></div>
+          <aside class="assembly-sidebar"><section class="assembly-effects" aria-labelledby="equipment-effects-title"><h3 id="equipment-effects-title">当前效果</h3><dl id="equipment-effects" aria-live="polite"></dl></section><div class="assembly-actions"><button id="equipment-add" type="button">添加装备</button><button id="equipment-clear" type="button">清空装配台</button><button id="equipment-recycle" type="button" aria-label="回收站：卸下装备" title="回收站"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 13h26M18 13V7h10v6M14 13l2 26h14l2-26M20 19v14M26 19v14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></aside>
+        </div>
+        <section id="equipment-picker" hidden><div class="settings-heading"><h3 id="equipment-picker-title">选择装备</h3><button id="equipment-picker-close" type="button">×</button></div><div id="equipment-list" tabindex="0"></div></section>
+        <button id="equipment-start" type="button" hidden>开始战斗</button>
+      </dialog>
+      <dialog id="assembly-upgrade-dialog" aria-labelledby="assembly-upgrade-title"><div class="settings-heading"><h2 id="assembly-upgrade-title">升级装配台</h2><button id="assembly-upgrade-close" type="button">返回</button></div><div id="assembly-upgrade-list"></div></dialog>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

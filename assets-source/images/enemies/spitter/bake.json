@@ -1,0 +1,12 @@
+{
+  "source": "spitter.glb",
+  "target": "spitter_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 0.8999464735202723,
+  "loops": 23793,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}

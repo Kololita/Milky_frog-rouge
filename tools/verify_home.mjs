@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {gameFixture} from './game_fixture.mjs';
+const g=await gameFixture(60,{home:true}),{read,tick,key,hud}=g;
+assert(!read('inPractice'));tick(1);assert.equal(read('battle.time'),0);
+key('KeyJ');key('KeyJ',false);assert(!read('activeGesture'));
+assert(!hud.get('home-practice').disabled);
+hud.get('home-practice').listeners.get('click')();assert(read('inPractice'));tick(.2);assert(read('battle.time>0'));
+key('KeyL');key('KeyL',false);assert(!read('activeGesture?.name==="Laugh"'));
+assert.equal(read('settings.resolve("KeyL")'),null);
+hud.get('return-home').listeners.get('click')();assert(!read('inPractice'));
+const time=read('battle.time');tick(.3);assert.equal(read('battle.time'),time);
+hud.get('home-practice').listeners.get('click')();assert(read('inPractice'));tick(.2);assert(read('battle.time>0'));
+const html=await fs.readFile(new URL('../index.html',import.meta.url),'utf8');
+assert(/button[^>]*disabled>开始新游戏/.test(html)&&/button[^>]*disabled>读取游戏/.test(html));
+assert(html.includes('0.1.0')&&!html.includes('action-buttons'));
+console.log('HOME_VERIFIED: title screen pauses combat, practice/reentry, disabled placeholders, no voluntary laugh');

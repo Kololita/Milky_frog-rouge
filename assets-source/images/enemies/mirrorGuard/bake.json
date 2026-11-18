@@ -1,0 +1,12 @@
+{
+  "source": "mirrorGuard.glb",
+  "target": "mirrorGuard_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 1.0693024187810418,
+  "loops": 24825,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}

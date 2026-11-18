@@ -1,0 +1,12 @@
+{
+  "source": "scythemoth.glb",
+  "target": "scythemoth_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 1.0596864060901452,
+  "loops": 31125,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}

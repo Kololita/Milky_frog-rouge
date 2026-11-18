@@ -1,0 +1,17 @@
+{
+  "source": "mirrorGuard_low.glb",
+  "triangles": 8275,
+  "bones": 52,
+  "clips": [
+    "Idle",
+    "Walk",
+    "ShieldThrust",
+    "Parry",
+    "ParryPush",
+    "Riposte",
+    "ShieldThrow",
+    "Hurt",
+    "Death"
+  ],
+  "height": 1.65
+}

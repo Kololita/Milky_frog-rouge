@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';import * as THREE from 'three';import {createCombatCamera,worldCameraPose,createCameraOcclusion} from '../src/world-camera.js';import {CAMERA} from '../src/control-tuning.js';import {createArenaView} from '../src/arena-view.js';
+const player={x:0,y:0,z:0},orbit={yaw:0,pitch:CAMERA.pitch,distance:5.5};const endpoints=[];
+for(const fps of [30,60,144]){
+ const scene=new THREE.Scene(),wall=new THREE.InstancedMesh(new THREE.BoxGeometry(6,8,.4),new THREE.MeshStandardMaterial(),2);wall.setMatrixAt(0,new THREE.Matrix4().makeTranslation(0,2,-2));wall.setMatrixAt(1,new THREE.Matrix4().makeTranslation(10,2,-2));scene.add(wall);const view=createCombatCamera(scene),fade=createCameraOcclusion(scene),camera=new THREE.PerspectiveCamera();wall.position.x=20;const nominal=worldCameraPose(orbit,player);let previous=view.update(nominal,orbit,player,null,0);wall.position.x=0;
+ for(let i=0;i<fps;i++){
+  const p=view.update(nominal,orbit,player,null,1/fps);assert(Math.abs(p.position.z-previous.position.z)<.65);camera.position.copy(p.position);camera.lookAt(new THREE.Vector3().copy(p.target));camera.updateMatrixWorld();fade.update(camera,player,1/fps,view.blockers);const state=fade.states.get(wall);assert(state&&state.values[0]===0,'Pillar becomes opaque during approach');assert(state.values[1]===1,'Unrelated instances fade');previous=p;
+ }
+ endpoints.push(previous.position.z);wall.position.x=20;
+ for(let i=0;i<fps*3;i++){const p=view.update(nominal,orbit,player,null,1/fps);camera.position.copy(p.position);camera.lookAt(new THREE.Vector3().copy(p.target));camera.updateMatrixWorld();fade.update(camera,player,1/fps,view.blockers);}
+ assert.equal(view.blockers.size,0);assert(!fade.states.has(wall),'Obstacle never restored after transition');fade.clear();
+}
+assert(Math.max(...endpoints)-Math.min(...endpoints)<1e-5,'Transition depends on frame rate');
+const scene=new THREE.Scene();scene.background=new THREE.Color();scene.fog=new THREE.Fog(0,1,100);const ground=new THREE.Mesh(new THREE.PlaneGeometry(),new THREE.MeshStandardMaterial()),grid=new THREE.GridHelper();scene.add(ground,grid);const arena=createArenaView(scene,ground,grid);arena.setMode('samurai');const parts=arena.columnParts;assert(parts.length>8);for(const p of parts){assert.equal(p.count,12);assert.equal(p.userData.cameraFadeGroup,'arena-pillars');}
+const shaft=parts.find(p=>p.name.includes('圆角石柱')),core=parts.find(p=>p.name==='琥珀灯芯');shaft.geometry.computeBoundingBox();core.geometry.computeBoundingBox();const a=new THREE.Matrix4(),b=new THREE.Matrix4();shaft.getMatrixAt(0,a);core.getMatrixAt(0,b);const sa=shaft.geometry.boundingBox.clone().applyMatrix4(a),sb=core.geometry.boundingBox.clone().applyMatrix4(b);assert(sb.min.y>sa.max.y+.2,'Lamp core intersects shaft');
+const fade=createCameraOcclusion(scene),camera=new THREE.PerspectiveCamera();camera.position.set(0,1,0);camera.lookAt(0,1,1);camera.updateMatrixWorld();fade.update(camera,player,1/60,new Map([[shaft,new Set([0])]]));for(const p of parts){const state=fade.states.get(p);assert(state&&state.values[0]===0&&state.values[1]===1,'Pillar trim does not fade with body');}fade.clear();
+console.log('SMOOTH_CAMERA_AND_PILLARS_VERIFIED',JSON.stringify({fps:[30,60,144],endpoints,pillarParts:parts.length,lampClearance:sb.min.y-sa.max.y}));

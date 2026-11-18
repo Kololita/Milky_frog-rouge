@@ -1,0 +1,12 @@
+{
+  "source": "shellbug.glb",
+  "target": "shellbug_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 1.0051562322019296,
+  "loops": 28602,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}

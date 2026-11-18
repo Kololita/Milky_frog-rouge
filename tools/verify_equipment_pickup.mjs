@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {gameFixture} from './game_fixture.mjs';
+const g=await gameFixture(60,{home:true,equipment:true});g.read('enterArena("practice");equipmentMenu.open();equipmentMenu.place("armor-light",1,1);equipmentMenu.place("armor-padded",3,1)');
+let pieces=g.hud.get('assembly-pieces');pieces.children[0].children[0].listeners.get('click')({});
+assert.equal(g.read('equipmentMenu.assembly.boards.rage.placements.length'),1);
+assert.equal(g.read('equipmentMenu.assembly.boards.rage.placements[0].id'),'armor-padded');
+pieces.children[0].children[0].listeners.get('click')({});
+assert.equal(g.read('equipmentMenu.assembly.boards.rage.placements.length'),1);
+assert(g.hud.get('assembly-status').textContent);
+g.hud.get('assembly-board').children[19].listeners.get('click')();
+assert.equal(g.read('equipmentMenu.assembly.boards.rage.placements.length'),2);
+assert(g.read('equipmentMenu.assembly.boards.rage.placements.some(p=>p.id==="armor-light"&&p.y===3)'));
+console.log('EQUIPMENT_PICKUP_VERIFIED: immediate removal, occupied-cell placement rejection retains held item, successful replacement');

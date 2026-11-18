@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {gameFixture} from './game_fixture.mjs';
+const g=await gameFixture(60,{home:true,equipment:true});g.freezeEnemy=true;
+const challenge=()=>g.hud.get('home-samurai').listeners.get('click')();
+challenge();assert(g.read('equipmentMenu.opened'));assert(!g.read('inPractice'));assert(!g.hud.get('equipment-start').hidden);assert(g.hud.get('equipment-close').hidden);
+g.read('equipmentMenu.close()');assert(!g.read('inPractice'));assert(g.hud.get('equipment-start').hidden);
+challenge();g.read('battle.applyEquipment({gloves:"fist-steel",skill:"longarm"})');
+g.hud.get('equipment-start').listeners.get('click')();
+assert.equal(g.read('battle.mode'),'samurai');assert(g.read('inPractice'));assert(!g.read('equipmentMenu.opened'));assert.equal(g.read('battle.player.attackPower'),13);
+g.tap('KeyI');assert(!g.read('equipmentMenu.opened'),'Boss combat permits equipment menu');
+g.read('equipmentMenu.open()');assert(!g.read('equipmentMenu.opened'));
+g.read('enterArena("practice")');g.tap('KeyI');assert(g.read('equipmentMenu.opened'));assert(g.hud.get('equipment-start').hidden);assert(!g.hud.get('equipment-close').hidden);
+console.log('PREBATTLE_EQUIPMENT_VERIFIED: preparation, cancel, explicit start, retained gear, blocked boss swapping and unrestricted practice');

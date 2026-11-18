@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {AssemblyLoadout,ASSEMBLY_BOARDS,registerAssemblyBoard,shapeCells} from '../src/assembly-board.js';
+import {EQUIPMENT,equipmentBonuses} from '../src/equipment.js';
+import {gameFixture} from './game_fixture.mjs';
+const size=m=>m.join('').split('#').length-1;
+const m=new AssemblyLoadout();assert.equal(size(m.mask()),16);
+assert(!m.place('armor-light',0,0).ok);assert(m.place('armor-light',1,1).ok);assert(!m.place('fist-iron',1,1).ok);
+assert(m.place('armor-padded',3,1).ok);assert.equal(equipmentBonuses(m.loadout).health,5);
+assert(m.place('armor-light',1,2,1).ok);assert.equal(m.placements.length,2);
+const before=m.placements;assert(m.upgrade('rage'));assert.equal(size(m.mask()),25);assert.deepEqual(m.placements,before);assert(m.upgrade('rage'));assert.equal(size(m.mask()),36);assert(!m.upgrade('rage'));
+m.clear();assert(m.place('longarm',0,0).ok);assert(!m.place('drain',0,3).ok,'Two skills allowed');m.remove('longarm');assert(m.place('drain',0,3).ok);m.clear();assert.deepEqual(m.loadout,{ultimate:'rage'});
+for(const item of EQUIPMENT.filter(i=>i.slot!=='ultimate')){assert(item.shape);const model=new AssemblyLoadout();model.upgrade('rage');model.upgrade('rage');const fit=model.firstFit(item.id);assert(fit,item.id);assert(model.place(item.id,fit.x,fit.y,fit.rotation).ok);assert.equal(new Set(shapeCells(item.shape).map(String)).size,shapeCells(item.shape).length);}
+const owned=new Set(['rage']);assert(!new AssemblyLoadout({},owned).place('armor-light',1,1).ok);
+const damaged=new AssemblyLoadout({boards:{rage:{placements:[{id:'armor-light',x:1,y:1},{id:'armor-light',x:2,y:2},null,{id:'bad',x:1,y:1}]}}});assert.equal(damaged.placements.length,1);new AssemblyLoadout({boards:{rage:null}});
+EQUIPMENT.push({id:'test-ultimate',slot:'ultimate',name:'测试'});registerAssemblyBoard('test-ultimate',{levels:[['##....','##....','......','......','......','......']]});assert(m.selectUltimate('test-ultimate'));assert.equal(size(m.mask()),4);assert.equal(m.board().level,0);assert(m.selectUltimate('rage'));assert.equal(m.board().level,2);EQUIPMENT.pop();ASSEMBLY_BOARDS.delete('test-ultimate');
+const g=await gameFixture(60,{home:true,equipment:true,run:true});
+g.read('enterArena("practice");equipmentMenu.open()');assert.equal(g.hud.get('equipment-slots').children.length,1);assert.equal(g.hud.get('assembly-board').children.length,36);
+g.read('equipmentMenu.chooseEquipment()');const row=g.hud.get('equipment-list').children.find(e=>e.dataset.itemId==='armor-light');row.listeners.get('click')();g.hud.get('assembly-board').children[7].listeners.get('click')();assert.equal(g.read('battle.maxHealth'),105);assert.equal(g.hud.get('assembly-pieces').children[0].children.length,2);
+g.hud.get('assembly-pieces').children[0].children[0].listeners.get('click')({});g.hud.get('equipment-recycle').listeners.get('click')();assert.equal(g.read('battle.maxHealth'),100);
+g.read('equipmentMenu.close();equipmentMenu.startRun();globalThis.restVisits=0;openRestSite(()=>restVisits++)');const buttons=g.hud.get('rest-options').children;assert.equal(buttons.length,2);buttons[1].listeners.get('click')();assert(g.hud.get('assembly-upgrade-dialog').open);g.hud.get('assembly-upgrade-close').listeners.get('click')();assert(g.read('restSite.opened'));assert.equal(g.read('restVisits'),0);buttons[1].listeners.get('click')();g.hud.get('assembly-upgrade-list').children[0].listeners.get('click')();assert(!g.read('restSite.opened'));assert.equal(g.read('restVisits'),1);assert.equal(g.read('equipmentMenu.assembly.boards.rage.level'),1);buttons[0].listeners.get('click')();assert.equal(g.read('restVisits'),1);
+g.read('equipmentMenu.startRun()');assert.equal(g.read('equipmentMenu.assembly.boards.rage.level'),0);
+console.log('ASSEMBLY_BOARD_VERIFIED: masks, expansion, shapes, ownership, overlap, multiple gear, one skill, migration validation, independent ultimate boards, UI placement/recycle and exclusive rest/upgrade');

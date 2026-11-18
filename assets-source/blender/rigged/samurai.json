@@ -1,0 +1,23 @@
+{
+  "source": "samurai_low.glb",
+  "triangles": 18355,
+  "bones": 52,
+  "clips": [
+    "Idle",
+    "Walk",
+    "CrossLeft",
+    "CrossRight",
+    "Overhead",
+    "Rising",
+    "RisingLeft",
+    "RisingRight",
+    "ShortThrust",
+    "LongThrust",
+    "RoundSweep",
+    "BuriedOverhead",
+    "Extract",
+    "Hurt",
+    "Death"
+  ],
+  "height": 2.25
+}

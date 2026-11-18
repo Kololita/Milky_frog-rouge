@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';
+import {SHAPES,SHAPE_POOLS} from '../src/equipment-shapes.js';
+const raw=await fs.readFile('docs/equipment/占地形状池.md','utf8'),typeNames={护甲:'armor',武器:'weapon',护符:'accessory',技能:'skill'};const config={};let type;
+for(const block of raw.split(/^## /m).slice(1)){
+ type=Object.entries(typeNames).find(([name])=>block.startsWith(name+'形状池'))?.[1];if(!type)continue;config[type]={};let rarity;
+ for(const part of block.split(/^### /m).slice(1)){rarity=part.split('\n')[0].trim();config[type][rarity]=[];for(const shape of part.split(/^#### /m).slice(1)){const id=shape.split('\n')[0].trim(),grid=shape.match(/```text\s*\n([.#\s]+?)```/)?.[1].trim().split(/\r?\n/);if(!grid)continue;const weight=Number(shape.match(/(?:权重[：:]?\s*|形状倍率)([\d.]+)/)?.[1]??SHAPES[id]?.multiplier??1);config[type][rarity].push({id,shape:grid,weight:Math.round(weight*100)/100});}}
+}
+const extra={white:['#..','##.'],green:['####'],blue:['#..','#..','###','#..'],purple:['###','#.#','###'],gold:['####','#...','#...','#...','####']};
+for(const [type,grades]of Object.entries(config))for(const [rarity,list]of Object.entries(grades))list.push({id:`${rarity}-${type}-extra`,shape:extra[rarity],weight:{white:1.6,green:1.08,blue:1.1,purple:1.06,gold:1.05}[rarity]});
+await fs.writeFile('src/equipment-shape-data.js','export const AUTHORED_SHAPE_POOLS='+JSON.stringify(config,null,2)+';\n');
+let source=await fs.readFile('src/equipment-shapes.js','utf8');source="import {AUTHORED_SHAPE_POOLS} from './equipment-shape-data.js';\n"+source;source+=`\nfor(const [type,grades]of Object.entries(AUTHORED_SHAPE_POOLS))for(const [rarity,list]of Object.entries(grades)){SHAPE_POOLS[type][rarity]=list.map(entry=>{const existing=SHAPES[entry.id],id=existing&&JSON.stringify(existing.shape)!==JSON.stringify(entry.shape)?type+'-'+entry.id:entry.id;SHAPES[id]={id,rarity,shape:entry.shape,metrics:analyzeShape(entry.shape),multiplier:entry.weight};return id;});}\n`;await fs.writeFile('src/equipment-shapes.js',source);
+let doc='# 占地形状池\n\n同类型同品质共享池，获得奖励时随机确定，随后固定。权重为属性形状倍率，最多两位小数；各候选等概率。基础数值直接采用装备设计稿，不再按稀有度预算自动放大。\n\n';for(const [type,grades]of Object.entries(config)){doc+=`## ${Object.keys(typeNames).find(k=>typeNames[k]===type)}形状池\n\n`;for(const [rarity,list]of Object.entries(grades)){doc+=`### ${rarity}\n\n`;for(const e of list)doc+=`#### ${e.id}\n\n权重：${e.weight.toFixed(2)}\n\n\`\`\`text\n${e.shape.join('\n')}\n\`\`\`\n\n`;}}await fs.writeFile('docs/equipment/占地形状池.md',doc);

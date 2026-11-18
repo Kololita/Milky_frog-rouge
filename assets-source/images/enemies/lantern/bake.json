@@ -1,0 +1,12 @@
+{
+  "source": "lantern.glb",
+  "target": "lantern_low.glb",
+  "resolution": 2048,
+  "alignmentScale": 0.9365936330963485,
+  "loops": 23622,
+  "textures": [
+    "basecolor",
+    "orm",
+    "normal"
+  ]
+}
