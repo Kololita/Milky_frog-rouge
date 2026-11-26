@@ -7,7 +7,10 @@ import {AssemblyLoadout,shapeCells,shapeSize,ASSEMBLY_BOARDS} from './assembly-b
 import {resolveEquipment,rollEquipment,validEquipmentRoll,equipmentDescription,equipmentDisplayInteger} from './equipment-rolls.js';
 export {EQUIPMENT,RARITIES};
 export const EQUIPMENT_SLOTS={armor:'装甲',gloves:'拳套',charm:'护符',skill:'技能',ultimate:'大招'};
-export const equipmentIconUrl=icon=>`/images/equipment/${icon}.${['longarm','drain','rage'].includes(icon)?'png':'svg'}`;
+export function equipmentIconUrl(icon){
+ if(icon==='longarm'||icon==='rage')return `/images/equipment/${icon}.png`;
+ return `/images/equipment/illustrated/${icon}.png`;
+}
 export function normalizeEquipmentLoadout(loadout={}){
  // Old saves and direct combat tools may still supply category keys; the menu emits installed IDs.
  if(!Array.isArray(loadout.installed))return {...loadout};
@@ -39,7 +42,7 @@ export function equipmentEffectSummary(value={}){
  return rows;
 }
 export function createEquipmentMenu(doc,win,{equip=()=>{},onOpen=()=>{},onClose=()=>{},canOpen=()=>true}={}){
- const storage=win.naiwaSettings??win.localStorage,key='milk-heroes-assembly-v2';let owned=null,opened=false,model;
+ const storage=win.naiwaSettings??win.localStorage,key='milk-heroes-assembly-v2';let owned=null,opened=false,model,fixedUltimate=null;
  let raw=null;try{raw=JSON.parse(storage?.getItem(key)??'null');}catch{}
  try{model=new AssemblyLoadout(raw??{});}catch{model=new AssemblyLoadout();}
  if(!raw){try{const old=JSON.parse(storage?.getItem('milk-heroes-equipment-v1')??'{}');if(old.ultimate)model.selectUltimate(old.ultimate);for(const slot of ['armor','gloves','charm','skill']){const id=old[slot],fit=id&&model.firstFit(id);if(fit)model.place(id,fit.x,fit.y,fit.rotation);}}catch{}}
@@ -62,20 +65,20 @@ export function createEquipmentMenu(doc,win,{equip=()=>{},onOpen=()=>{},onClose=
  }
 
  function commit(){equip(model.loadout);try{if(!owned)storage?.setItem(key,JSON.stringify(model.snapshot()));}catch{}render();}
- function image(item){const img=doc.createElement('img');img.src=equipmentIconUrl(item.icon)+'?v=board-icons-2';img.alt=item.name;img.draggable=false;return img;}
+ function image(item){const img=doc.createElement('img');img.src=equipmentIconUrl(item.icon);img.alt=item.name;img.draggable=false;return img;}
  function markPivot(tile,item,x,y,rotation=0,active=null){const index=pivotCells(item.shape,rotation,item.bendPivots).findIndex(([px,py])=>px===x&&py===y);if(index<0)return;tile.classList.add('is-bend');tile.title=(tile.title?tile.title+' · ':'')+'拐点';if(active&&(active.bendIndex??0)===index)tile.classList.add('is-active-bend');}
  function shapePreview(item){const cells=shapeCells(item.shape),size=shapeSize(cells),mini=doc.createElement('span');mini.className='equipment-shape-preview';mini.style.gridTemplateColumns=`repeat(${size.width},9px)`;mini.style.gridTemplateRows=`repeat(${size.height},9px)`;for(const [x,y]of cells){const square=doc.createElement('i');markPivot(square,item,x,y);square.style.gridColumn=String(x+1);square.style.gridRow=String(y+1);mini.append(square);}return mini;}
  function render(){
   if(!dialog)return;
   if(effects){effects.replaceChildren();const rows=equipmentEffectSummary(model.loadout);if(!rows.length){const empty=doc.createElement('div');empty.className='equipment-effects-empty';empty.textContent='无';effects.append(empty);}let passiveHeading=false;for(const row of rows){if(row.key.startsWith('passive-')&&!passiveHeading){const heading=doc.createElement('div');heading.className='equipment-passives-heading';heading.textContent='附加被动';effects.append(heading);passiveHeading=true;}const line=doc.createElement('div'),label=doc.createElement('dt'),value=doc.createElement('dd');if(row.tooltip){line.title=row.tooltip;line.setAttribute('tabindex','0');line.setAttribute('aria-label',`${row.label} ${row.value}：${row.tooltip}`);}line.dataset.effect=row.key;line.className=row.key==='skill'?'equipment-effect-skill':row.negative?'is-negative':'';renderEquipmentText(doc,label,row.label,{lines:false});renderEquipmentText(doc,value,row.value);line.append(label,value);effects.append(line);}}
-  slots.replaceChildren();const item=find(model.ultimate),wrap=doc.createElement('div'),title=doc.createElement('h3'),button=doc.createElement('button'),name=doc.createElement('p');title.textContent='大招';button.type='button';button.className='equipment-slot';button.setAttribute('aria-label','选择大招');if(item){button.setAttribute('data-rarity',item.rarity);button.append(image(item));}name.textContent=model.name();button.addEventListener('click',()=>choose('ultimate'));wrap.append(title,button,name);slots.append(wrap);
+  slots.replaceChildren();const item=find(model.ultimate),wrap=doc.createElement('div'),title=doc.createElement('h3'),button=doc.createElement('button'),name=doc.createElement('p');title.textContent='大招';button.type='button';button.className='equipment-slot';button.disabled=Boolean(fixedUltimate);button.setAttribute('aria-label',fixedUltimate?'当前大招':'选择大招');if(item){button.setAttribute('data-rarity',item.rarity);button.append(image(item));}name.textContent=model.name();button.addEventListener('click',()=>choose('ultimate'));wrap.append(title,button,name);slots.append(wrap);
   const boardRows=model.mask().length,boardCols=model.mask()[0].length;
   if(board){board.style.gridTemplateColumns=`repeat(${boardCols},1fr)`;board.style.gridTemplateRows=`repeat(${boardRows},1fr)`;board.replaceChildren();for(let y=0;y<boardRows;y++)for(let x=0;x<boardCols;x++){const cell=doc.createElement('button');cell.type='button';cell.className='assembly-cell '+(model.mask()[y][x]==='#'?'is-open':'is-closed');cell.setAttribute('aria-label',`${x+1}列${y+1}行${model.mask()[y][x]==='#'?'开放':'未开放'}`);cell.dataset.x=String(x);cell.dataset.y=String(y);cell.addEventListener('click',()=>{if(suppressClick||!selected)return;const result=placeAt(selected,x,y);if(result.ok){selected=null;clearGhost();text('');commit();}else text(result.reason);});board.append(cell);}}
   if(pieces){pieces.replaceChildren();for(const placement of model.placements){const entry=find(placement.id),cells=shapeCells(entry.shape,placement.rotation),size=shapeSize(cells),piece=doc.createElement('div');piece.className='assembly-piece';piece.dataset.itemId=entry.id;piece.style.left=`${placement.x/boardCols*100}%`;piece.style.top=`${placement.y/boardRows*100}%`;piece.style.width=`${size.width/boardCols*100}%`;piece.style.height=`${size.height/boardRows*100}%`;piece.style.gridTemplateColumns=`repeat(${size.width},1fr)`;piece.style.gridTemplateRows=`repeat(${size.height},1fr)`;piece.setAttribute('data-rarity',entry.rarity);
    for(const [x,y]of cells){const tile=doc.createElement('button');tile.type='button';tile.className='assembly-tile';tile.style.gridColumn=String(x+1);tile.style.gridRow=String(y+1);tile.title=`${entry.name}：${entry.description}`;markPivot(tile,entry,x,y,placement.rotation);tile.setAttribute('aria-label',entry.name);tile.append(image(entry));tile.addEventListener('pointerdown',event=>beginDrag(event,entry.id,placement,[x,y]));tile.addEventListener('click',event=>{event.stopPropagation?.();if(suppressClick)return;if(selected){const result=placeAt(selected,placement.x+x,placement.y+y);if(result.ok){selected=null;clearGhost();text('');commit();}else text(result.reason);return;}selectItem(entry.id,placement.rotation,event);});piece.append(tile);}pieces.append(piece);
   }}
  }
- function choose(mode){if(!picker)return;picker.hidden=false;list.replaceChildren();get('equipment-picker-title').textContent=mode==='ultimate'?'选择大招':'添加装备';
+ function choose(mode){if(!picker||mode==='ultimate'&&fixedUltimate)return;picker.hidden=false;list.replaceChildren();get('equipment-picker-title').textContent=mode==='ultimate'?'选择大招':'添加装备';
   const installed=new Set(model.placements.map(p=>p.id));const items=EQUIPMENT.filter(item=>model.has(item.id)&&(mode==='ultimate'?item.slot==='ultimate':item.slot!=='ultimate'&&!installed.has(item.id))).map(item=>find(item.id));
   for(const item of items){const button=doc.createElement('button');button.type='button';button.className='equipment-choice';button.dataset.itemId=item.id;button.setAttribute('data-rarity',item.rarity);button.append(image(item));const labels=doc.createElement('span'),name=doc.createElement('strong'),desc=doc.createElement('small');name.textContent=mode==='ultimate'?model.name(item.id):item.name;renderEquipmentText(doc,desc,equipmentDescription(item));labels.append(name,desc);button.append(labels);if(item.shape)button.append(shapePreview(item));
    if(mode==='ultimate')button.disabled=!ASSEMBLY_BOARDS.has(item.id);
@@ -129,10 +132,13 @@ export function createEquipmentMenu(doc,win,{equip=()=>{},onOpen=()=>{},onClose=
  });
  list?.addEventListener('wheel',event=>{event.preventDefault();event.stopPropagation();list.scrollTop+=(event.deltaY??0)*(event.deltaMode===1?16:event.deltaMode===2?list.clientHeight:1);},{passive:false});
  const api={
-  startRun(){clearGhost();owned=new Set(STARTING_ITEMS);model=new AssemblyLoadout({},owned);selected=null;commit();},
-  sandbox({maxLevel=false}={}){clearGhost();owned=null;model=new AssemblyLoadout({rolls:Object.fromEntries(EQUIPMENT.filter(i=>i.slot!=='ultimate').map(i=>[i.id,rollEquipment(i.id)]))});if(maxLevel)for(const choice of model.upgradeChoices())while(model.upgrade(choice.item.id)){}selected=null;commit();},
+  startRun(snapshot={},inventory=STARTING_ITEMS,{fixedUltimate:ultimate=null}={}){
+   clearGhost();owned=new Set(inventory);fixedUltimate=ultimate;
+   model=new AssemblyLoadout(ultimate?{...snapshot,ultimate}:snapshot,owned);selected=null;drag=null;commit();
+  },
+  sandbox({maxLevel=false}={}){clearGhost();owned=null;fixedUltimate=null;model=new AssemblyLoadout({rolls:Object.fromEntries(EQUIPMENT.filter(i=>i.slot!=='ultimate').map(i=>[i.id,rollEquipment(i.id)]))});if(maxLevel)for(const choice of model.upgradeChoices())while(model.upgrade(choice.item.id)){}selected=null;commit();},
   debugGrant(id,roll){if(!model.debugGrant(id,roll))return false;selected=null;drag=null;clearGhost();commit();return true;},
-  grant(id,roll){if(!find(id))return false;const changed=model.grant(id,roll??rollEquipment(id));render();return changed;},
+  grant(id,roll,upgrade){if(!find(id))return false;const changed=model.grant(id,roll??rollEquipment(id),upgrade);render();return changed;},
   upgradeItem(id){if(!model.upgradeItem(id))return false;commit();return true;},
   trimCell(id,cell){if(!model.trimCell(id,cell))return false;commit();return true;},
   hingeItems(){return EQUIPMENT.filter(i=>i.slot!=='ultimate'&&model.has(i.id)).map(i=>({item:model.item(i.id),state:model.hingeState(i.id),upgrade:model.upgradePreview(i.id)}));},
@@ -141,9 +147,9 @@ export function createEquipmentMenu(doc,win,{equip=()=>{},onOpen=()=>{},onClose=
   get ownedIds(){return owned?[...owned]:EQUIPMENT.map(item=>item.id);},get loadout(){return model.loadout;},get assembly(){return model.snapshot();},get opened(){return opened;},get holding(){return Boolean(selected||drag);},
   place(id,x,y,rotation=0){const result=model.place(id,x,y,rotation);if(result.ok)commit();else text(result.reason);return result;},
   remove(id){const changed=model.remove(id);if(changed)commit();return changed;},clear(){model.clear();selected=null;clearGhost();commit();},
-  selectUltimate(id){if(!model.selectUltimate(id))return false;selected=null;clearGhost();commit();return true;},
-  chooseEquipment(){choose('equipment');},upgradeChoices(){return model.upgradeChoices();},
-  upgrade(id){if(!model.upgrade(id))return false;commit();return true;},
+  selectUltimate(id){if(fixedUltimate&&id!==fixedUltimate||!model.selectUltimate(id))return false;selected=null;clearGhost();commit();return true;},
+  chooseEquipment(){choose('equipment');},upgradeChoices(){return model.upgradeChoices().filter(choice=>!fixedUltimate||choice.item.id===fixedUltimate);},
+  upgrade(id){if(fixedUltimate&&id!==fixedUltimate||!model.upgrade(id))return false;commit();return true;},
   open({beforeBattle=false,onStart=null,onCancel=null}={}){if(opened||(!beforeBattle&&!canOpen()))return;opened=true;dialog?.classList?.toggle('prebattle',beforeBattle);if(get('equipment-close'))get('equipment-close').hidden=beforeBattle;startBattle=beforeBattle?onStart:null;cancelPreparation=onCancel;if(startButton)startButton.hidden=!beforeBattle;if(picker)picker.hidden=true;selected=null;text('');onOpen();render();dialog?.showModal();},
   close({starting=false}={}){if(!opened)return;opened=false;drag=null;selected=null;clearGhost();startBattle=null;const cancel=cancelPreparation;cancelPreparation=null;if(!starting)cancel?.();if(startButton)startButton.hidden=true;dialog?.close();onClose();},
  };

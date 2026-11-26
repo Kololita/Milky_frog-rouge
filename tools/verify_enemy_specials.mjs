@@ -95,12 +95,14 @@ for(const fps of [30,60,144]){
  assert(choices.get('retreat')>250&&choices.get('retreat')<450);assert(choices.get('shoot')>150);assert(choices.get('tail-sweep')>150,'Close range never chooses melee');
  const b=new Battle();b.reset('spitter');b.enemy.z=1.6;b.enemy.decisionSeed=0;b.enemy.nextRetreatAt=100;b.update(.01,pose);assert.notEqual(b.enemy.move.kind,'movement','Retreat ignores cooldown');
 }
-function stance(heading=Math.PI,elapsed=.3){const b=new Battle();b.reset('mirrorGuard');const e=b.enemy;e.z=1;e.heading=heading;e.state='windup';e.move=e.stats.moves[1];e.moveIndex=1;e.elapsed=elapsed;e.telegraph=e.move.prepare;e.swingDuration=e.move.swing;e.windup=e.telegraph+e.swingDuration;return b;}
-{
- const b=stance();b.beginAttack('Attack1');b.resolveAttack(.27,pose);assert.equal(b.enemy.health,b.enemy.maxHealth);assert.equal(b.enemy.counterPending,2);assert(!b.attack);assert(b.takeEvents().some(e=>e.type==='enemyParry'));
+function stance(heading=Math.PI,elapsed=.5){const b=new Battle();b.reset('mirrorGuard');const e=b.enemy;e.z=1;e.heading=heading;e.state='windup';e.move=e.stats.moves[1];e.moveIndex=1;e.elapsed=elapsed;e.telegraph=e.move.prepare;e.swingDuration=e.move.swing;e.windup=e.telegraph+e.swingDuration;return b;}
+for(const attack of ['Attack1','Attack2','Attack3','Attack4','RunAttack','AirAttack','CounterWave']){
+ const b=stance();b.beginAttack(attack);b.resolveAttack(2,{...pose,landed:true});assert.equal(b.enemy.health,b.enemy.maxHealth,attack);assert.equal(b.enemy.counterPending,2);assert(!b.attack);assert(b.takeEvents().some(e=>e.type==='enemyParry'));
+ if(attack==='CounterWave'){assert.equal(b.waves.length,1);b.waves=[];}
  for(let i=0;i<10;i++)b.update(1/60,pose);assert.equal(b.enemy.move.label,'弹反回斩');assert.equal(b.enemy.state,'windup');
+ assert(b.enemy.move.skipWarning);
 }
-for(const [attack,heading,elapsed] of [['Attack4',Math.PI,.3],['Attack1',0,.3],['Attack1',Math.PI,.83],['AirAttack',Math.PI,.3]]){
+for(const [attack,heading,elapsed] of [['Attack4',Math.PI,.499],['Attack1',0,.5],['Attack1',Math.PI,1.701],['AirAttack',Math.PI,.499]]){
  const b=stance(heading,elapsed);b.beginAttack(attack);b.resolveAttack(1,{...pose,landed:true});assert(b.enemy.health<b.enemy.maxHealth,`${attack} cannot punish stance`);assert(!b.takeEvents().some(e=>e.type==='enemyParry'));
 }
-console.log('ENEMY_SPECIALS_VERIFIED: ranged pressure in every strong formation, 30/60/144FPS dual visuals, swept 3D projectiles/guard/dodge/height, slow time/snapshot, retreat motion and directional light-parry/heavy punish');
+console.log('ENEMY_SPECIALS_VERIFIED: ranged pressure, swept projectiles, retreat, directional melee parries and untelegraphed riposte');

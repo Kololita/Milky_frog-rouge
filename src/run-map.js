@@ -1,9 +1,11 @@
 import {deriveSeed,formatMapSeed,newMapSeed,seededRandom} from './run-random.js';
 import {arrangeRunMap} from './run-map-layout.js';
-import {rollEquipment} from './equipment-rolls.js';
-import {rollLoot,createLootProtection} from './loot.js';
+import {nextEquipmentUpgrade,rollEquipment} from './equipment-rolls.js';
+import {rollLoot,createLootProtection,hasLootAtLeast} from './loot.js';
 import {STARTING_ITEMS,EQUIPMENT} from './equipment-catalog.js';
 import {ENCOUNTER_POOLS,chooseFormation} from './encounter-formations.js';
+import {ENERGY_STATS} from './battle-values.js';
+import {rollRunBoons,runBoon,runClasses} from './run-start.js';
 export const MAP_LAYOUT=Object.freeze({
  layers:16,rowGap:200,padding:80,width:920,
  dashLength:3,dashGap:7,minNodeDistance:150,
@@ -15,6 +17,11 @@ const MIN_ROW_WIDTH=3,MAX_ROW_WIDTH=6,MAX_NODE_DEGREE=3;
 const corridorPatterns=new Map();
 export const SHOP_CATEGORIES=[['armor','防具'],['gloves','武器'],['charm','护符'],['skill','技能']];
 export const SHOP_SERVICE_PRICE=50;
+export const EXPEDITION_RULES=Object.freeze({
+ guideSteps:3,guideGold:100,huntBossHealthFactor:.88,
+ restBonusPotions:2,
+});
+export const WORKSHOP_VOUCHER_PRICE=45;
 const SHOP_PRICES={white:24,green:38,blue:58,purple:82,gold:110};
 const GOLD_DROPS={monster:[10,20],elite:[30,50]};
 function shuffle(items,random){
@@ -148,17 +155,133 @@ export function shopOffers(node,inventory){
  });
 }
 export class RunProgress{
- constructor(seed=newMapSeed()){this.map=generateRunMap(seed);this.status='map';this.layer=0;this.gold=0;this.lastGoldReward=0;this.shopStock=[];this.path=[];this.selected=null;this.ordinaryBattles=0;this.lastOrdinary=null;this.inventory=[...STARTING_ITEMS];this.lootChoices=[];this.lootRolls={};this.equipmentRolls={};this.lootProtection=createLootProtection();}
+ static restore(data){
+  const {map,selected,...state}=data;
+  const nodes=map.rows.flat(),byId=new Map(nodes.map(node=>[node.id,node]));
+  if(state.layer<0||state.layer>map.rows.length||state.path.some(id=>!byId.has(id))||
+     (!['map','startingReward'].includes(state.status)&&!byId.has(selected)))throw Error('无效的远征进度');
+  const {ember,...plans}=state.plans??{};
+  delete state.carryEnergy;
+  if(state.status==='event'&&ember?.origin===selected)state.eventResult=null;
+  if(state.status==='reward'){
+   const ultimateIds=new Set(runClasses().map(item=>item.id));
+   state.lootChoices=state.lootChoices.filter(id=>!ultimateIds.has(id));
+   if(!state.lootChoices.length)state.status='victory';
+  }
+  state.lootUpgrades??={};
+  return Object.assign(Object.create(RunProgress.prototype),state,{plans,map:{...map,nodes},selected:byId.get(selected)??null});
+ }
+ snapshot(){
+  const {map,selected,...state}=this;
+  return {...state,map:{seed:map.seed,rows:map.rows,height:map.height},selected:selected?.id??null};
+ }
+ constructor(seed=newMapSeed(),setup=null){
+  const mapSeed=formatMapSeed(seed);
+  const boon=setup?rollRunBoons(mapSeed).find(option=>option.id===setup.boon):undefined;
+  if(setup&&(!boon||!runClasses().some(item=>item.id===setup.ultimate)))throw new Error('请选择可用的职业与开局增益');
+  this.map=generateRunMap(mapSeed);this.status='map';this.layer=0;this.gold=boon?.gold??0;this.lastGoldReward=0;this.shopStock=[];this.path=[];this.selected=null;this.ordinaryBattles=0;this.lastOrdinary=null;
+  this.inventory=setup?[setup.ultimate]:[...STARTING_ITEMS];
+  if(setup){this.startingUltimate=setup.ultimate;this.startingBoonId=boon.id;}
+  this.lootChoices=[];this.lootRolls={};this.lootUpgrades={};this.equipmentRolls={};this.lootProtection=createLootProtection();this.plans={};this.roomNotices=[];
+  if(boon?.reward){
+   const random=seededRandom(deriveSeed(mapSeed,'starting-reward'));
+   this.lootChoices=rollLoot('monster',random,this.inventory,createLootProtection(),boon.reward);
+   this.lootRolls=Object.fromEntries(this.lootChoices.map(id=>[id,rollEquipment(id,random)]));
+   if(this.lootChoices.length)this.status='startingReward';
+  }
+ }
+ get startingBoon(){return runBoon(this.startingBoonId);}
+ get startingAssembly(){
+  const ultimate=this.startingUltimate;
+  if(!ultimate)return undefined;
+  return {ultimate,boards:{[ultimate]:{level:this.startingBoon?.boardLevel??0,placements:[]}}};
+ }
+ get guidedRoute(){
+  const guide=this.plans.guide;
+  return guide?[guide.from,...guide.remaining]:[];
+ }
+ get cachePending(){const cache=this.plans.cache;return cache&&hasLootAtLeast(this.inventory,cache.minimumRarity);}
+ surveyRoute(node){
+  const random=seededRandom(deriveSeed(this.map.seed,`survey-route:${node.id}`)),remaining=[];
+  for(let step=0;step<EXPEDITION_RULES.guideSteps;step++){
+   if(!node.next.length)return [];
+   const id=node.next[Math.floor(random()*node.next.length)];
+   remaining.push(id);node=this.map.rows[node.layer+1].find(room=>room.id===id);
+  }
+  return remaining;
+ }
+ setEventPlan(plan){
+  if(plan.key==='guide'){
+   this.plans.guide={from:this.selected.id,remaining:this.surveyRoute(this.selected)};
+   return;
+  }
+  this.plans[plan.key]={...plan,origin:this.selected.id};
+ }
+ settleBond(payout,message){
+  this.gold+=payout;delete this.plans.bond;
+  this.roomNotices.push(`旅契${message} · +${payout} 金币`);
+ }
+ visit(node){
+  this.roomNotices=[];
+  const {guide,bond}=this.plans;
+  if(guide&&node.id!==guide.from){
+   if(node.id!==guide.remaining[0]){
+    delete this.plans.guide;this.roomNotices.push('巡山路线 · 已偏离');
+   }else{
+    guide.remaining.shift();guide.from=node.id;
+    if(!guide.remaining.length){
+     this.gold+=EXPEDITION_RULES.guideGold;delete this.plans.guide;
+     this.roomNotices.push(`巡山路线 · +${EXPEDITION_RULES.guideGold} 金币`);
+    }
+   }
+  }
+  if(bond&&node.id!==bond.origin){
+   bond.qualified||=node.type===bond.type;
+   bond.remaining--;
+   if(bond.qualified&&bond.early)this.settleBond(bond.deposit+bond.bonus,'履约');
+   else if(!bond.remaining)this.settleBond(bond.qualified?bond.deposit+bond.bonus:bond.refund??bond.deposit,'到期');
+  }
+  this.path.push(node.id);this.layer++;
+ }
  seedFor(domain){return deriveSeed(this.map.seed,`${domain}:${this.selected?.id??'run'}`);}
- available(){if(this.status!=='map')return [];if(!this.path.length)return this.map.rows[this.layer];const prev=this.map.nodes.find(n=>n.id===this.path.at(-1));return this.map.nodes.filter(n=>prev.next.includes(n.id));}
- select(id){const node=this.available().find(n=>n.id===id);if(!node)return null;if(node.type==='monster')node.encounter=chooseFormation(node,this.ordinaryBattles,this.lastOrdinary);this.selected=node;this.status='preparing';return node;}
+ battleStart(){
+  const {hunt,blessing,cache}=this.plans;
+  const type=this.selected?.type;
+  const openingEnergy=blessing&&blessing.type===type?blessing.energy:0;
+  return {
+   energy:Math.min(ENERGY_STATS.max,openingEnergy),
+   enemyHealthFactor:type==='boss'&&hunt&&!hunt.failed&&hunt.remaining===0
+    ?hunt.bossHealthFactor??EXPEDITION_RULES.huntBossHealthFactor
+    :type==='monster'&&this.cachePending?cache.healthFactor:1,
+  };
+ }
+ available(){
+  if(this.status==='shop')return this.map.rows[this.selected.layer+1].filter(node=>this.selected.next.includes(node.id));
+  if(this.status!=='map')return [];
+  if(!this.path.length)return this.map.rows[this.layer];
+  const previous=this.map.nodes.find(node=>node.id===this.path.at(-1));
+  return this.map.rows[this.layer].filter(node=>previous.next.includes(node.id));
+ }
+ select(id){
+  const node=this.available().find(room=>room.id===id);
+  if(!node)return null;
+  if(this.status==='shop')this.finishShop();
+  if(node.type==='monster')node.encounter=chooseFormation(node,this.ordinaryBattles,this.lastOrdinary);
+  this.selected=node;this.status='preparing';return node;
+ }
  cancel(){if(this.status==='preparing'){this.status='map';this.selected=null;}}
- beginEvent(){if(this.status!=='preparing'||this.selected.type!=='event')return false;this.status='event';return true;}
- finishEvent(){if(this.status!=='event')return false;this.path.push(this.selected.id);this.layer++;this.status='map';this.selected=null;return true;}
+ beginEvent(){if(this.status!=='preparing'||this.selected.type!=='event')return false;this.eventResult=null;this.status='event';return true;}
+ finishEvent(){if(this.status!=='event')return false;this.eventResult=null;this.visit(this.selected);this.status='map';this.selected=null;return true;}
  begin(){if(this.status!=='preparing'||['rest','event','shop'].includes(this.selected.type))return false;if(this.selected.type==='monster'){this.ordinaryBattles++;this.lastOrdinary=this.selected.encounter;}this.status='battle';return true;}
- beginRest(){if(this.status!=='preparing'||this.selected.type!=='rest')return false;this.status='rest';return true;}
- finishRest(){if(this.status!=='rest')return false;this.path.push(this.selected.id);this.layer++;this.status='map';this.selected=null;return true;}
- beginShop(){if(this.status!=='preparing'||this.selected.type!=='shop')return false;this.shopStock=shopOffers(this.selected,this.inventory);this.status='shop';return true;}
+ beginRest(){if(this.status!=='preparing'||this.selected.type!=='rest')return false;this.restActions=[];this.status='rest';return true;}
+ finishRest(){if(this.status!=='rest')return false;this.restActions=[];delete this.plans.rest;this.visit(this.selected);this.status='map';this.selected=null;return true;}
+ beginShop(){
+  if(this.status!=='preparing'||this.selected.type!=='shop')return false;
+  this.shopStock=shopOffers(this.selected,this.inventory);this.status='shop';
+  const bond=this.plans.bond;
+  if(bond?.early&&bond.type==='shop')this.settleBond(bond.deposit+bond.bonus,'履约');
+  return true;
+ }
  buy(id){
   const offer=this.shopStock.find(item=>item.id===id);
   if(this.status!=='shop'||!offer||this.inventory.includes(id)||this.gold<offer.price)return null;
@@ -167,11 +290,39 @@ export class RunProgress{
   this.equipmentRolls[id]=offer.roll;
   return offer;
  }
- canBuyService(){return this.status==='shop'&&this.gold>=SHOP_SERVICE_PRICE;}
- payForService(){if(!this.canBuyService())return false;this.gold-=SHOP_SERVICE_PRICE;return true;}
- finishShop(){if(this.status!=='shop')return false;this.shopStock=[];this.path.push(this.selected.id);this.layer++;this.status='map';this.selected=null;return true;}
- finish(won,enemyCount=1){if(this.status!=='battle')return false;if(!won){this.status='lost';return true;}this.path.push(this.selected.id);this.layer++;
+ shopServicePrice(action){return action&&this.plans.voucher?.action===action?0:SHOP_SERVICE_PRICE;}
+ canBuyService(action){return this.status==='shop'&&this.gold>=this.shopServicePrice(action);}
+ payForService(action){
+  if(!this.canBuyService(action))return false;
+  const price=this.shopServicePrice(action);
+  this.gold-=price;
+  if(price===0){
+   const voucher=this.plans.voucher;
+   voucher.usesLeft=(voucher.usesLeft??1)-1;
+   if(!voucher.usesLeft)delete this.plans.voucher;
+  }
+  return true;
+ }
+ finishShop(){if(this.status!=='shop')return false;this.shopStock=[];delete this.plans.voucher;this.visit(this.selected);this.status='map';this.selected=null;return true;}
+ finish(won,enemyCount=1,{healthDamaged=false}={}){
+  if(this.status!=='battle')return false;
+  if(!won){this.status='lost';return true;}
+  this.visit(this.selected);
   if(this.selected.type==='boss'){this.status='won';return true;}
+  const {hunt,blessing,cache,cargo}=this.plans,type=this.selected.type;
+  if(hunt?.type===this.selected.type&&hunt.remaining>0){
+   if(healthDamaged){hunt.failed=true;hunt.remaining=0;}
+   else if(--hunt.remaining===0&&hunt.rewardGold){
+    this.gold+=hunt.rewardGold;this.roomNotices.push(`猎令完成 · +${hunt.rewardGold} 金币`);
+   }
+  }
+  if(blessing?.type===type)delete this.plans.blessing;
+  const minimumRarity=type==='monster'&&this.cachePending?cache.minimumRarity:undefined;
+  const count=type==='monster'&&cargo?cargo.offerCount:2;
+  if(type==='monster'){
+   if(cache)delete this.plans.cache;
+   if(cargo)delete this.plans.cargo;
+  }
   const random=seededRandom(this.seedFor('loot'));
   const goldRandom=seededRandom(this.seedFor('gold'));
   const rollRandom=seededRandom(this.seedFor('equipment-shapes'));
@@ -179,9 +330,23 @@ export class RunProgress{
   this.lastGoldReward=0;
   for(let i=0;i<enemyCount;i++)this.lastGoldReward+=min+Math.floor(goldRandom()*(max-min+1));
   this.gold+=this.lastGoldReward;
-  this.lootChoices=rollLoot(this.selected.type,random,this.inventory,this.lootProtection);this.lootRolls=Object.fromEntries(this.lootChoices.map(id=>[id,rollEquipment(id,rollRandom)]));
+  this.lootChoices=rollLoot(type,random,this.inventory,this.lootProtection,{count,minimumRarity});
+  this.lootRolls=Object.fromEntries(this.lootChoices.map(id=>[id,rollEquipment(id,rollRandom)]));
+  this.lootUpgrades={};
+  if(type==='monster'&&this.ordinaryBattles<=this.startingBoon?.upgradedBattles){
+   for(const id of this.lootChoices){
+    const upgrade=nextEquipmentUpgrade(id,this.lootRolls[id]);
+    if(upgrade)this.lootUpgrades[id]=upgrade;
+   }
+  }
   this.status=this.lootChoices.length?'reward':'victory';return true;
  }
- claimReward(id){if(this.status!=='reward'||!this.lootChoices.includes(id))return false;this.inventory.push(id);this.equipmentRolls[id]={...this.lootRolls[id]};this.lootChoices=[];this.lootRolls={};this.status='victory';return true;}
+ claimReward(id){
+  const starting=this.status==='startingReward';
+  if(!starting&&this.status!=='reward'||!this.lootChoices.includes(id))return false;
+  this.inventory.push(id);this.equipmentRolls[id]={...this.lootRolls[id]};
+  this.lootChoices=[];this.lootRolls={};this.lootUpgrades={};
+  this.status=starting?'map':'victory';return true;
+ }
  advance(){if(this.status!=='victory')return false;this.selected=null;this.status='map';return true;}
 }

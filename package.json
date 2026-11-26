@@ -1,7 +1,7 @@
 {
   "name": "milk-heroes",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "main": "desktop/main.cjs",
   "description": "奶蛙动作游戏 · 离线练习场",

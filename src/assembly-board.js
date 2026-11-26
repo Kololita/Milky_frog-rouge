@@ -43,7 +43,14 @@ export class AssemblyLoadout{
  flip(id,rotation=0){if(!this.item(id)?.shape||!this.has(id)||this.placements.some(p=>p.id===id)||(this.bends[id]?.length??0)>=256)return false;this.bends[id]=[...(this.bends[id]??[]),{mirror:rotation%2?'y':'x'}];return true;}
  debugGrant(id,roll){if(!itemById(id))return false;if(itemById(id).slot!=='ultimate'&&!validEquipmentRoll(itemById(id),roll))return false;this.owned?.add(id);if(roll)this.rolls[id]={...roll};delete this.bends[id];for(const [ultimate,b]of Object.entries(this.boards))b.placements=b.placements.filter(p=>p.id!==id||this.check(p.id,p.x,p.y,p.rotation,ultimate).ok);return true;}
 
- grant(id,roll){if(!itemById(id)||this.owned?.has(id))return false;this.owned?.add(id);if(validEquipmentRoll(itemById(id),roll)&&!this.rolls[id])this.rolls[id]={shapeId:roll.shapeId};return true;}
+ grant(id,roll,upgrade){
+  const item=itemById(id);
+  if(!item||this.owned?.has(id))return false;
+  this.owned?.add(id);
+  if(validEquipmentRoll(item,roll)&&!this.rolls[id])this.rolls[id]={shapeId:roll.shapeId};
+  if(upgrade)this.upgrades[id]=copy(upgrade);
+  return true;
+ }
  has(id){return !this.owned||this.owned.has(id);}
  board(id=this.ultimate){if(!this.boards[id])this.boards[id]={level:0,placements:[]};return this.boards[id];}
  mask(id=this.ultimate,level=this.board(id).level){return ASSEMBLY_BOARDS.get(id)?.levels[level]??Array(6).fill('......');}

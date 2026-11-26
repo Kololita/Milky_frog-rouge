@@ -3,7 +3,7 @@ productName: 奶蛙
 asar: true
 electronDist: output/electron-runtime45
 directories:
-  output: release/0.3.1
+  output: release/0.3.2
 files:
   - dist/**/*
   - desktop/**/*
@@ -24,4 +24,4 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: 奶蛙
-  uninstallDisplayName: 奶蛙 0.3.1
+  uninstallDisplayName: 奶蛙 0.3.2

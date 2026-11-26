@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import {Battle} from '../src/battle.js';
-import {SAMURAI_COMBOS,SAMURAI_EVADE,SAMURAI_MOVES,beginBossSequence,bossBladeWarning,samuraiSequence,samuraiSequenceWait,samuraiWaitMultiplier} from '../src/samurai.js';
+import {SAMURAI_COMBOS,SAMURAI_EVADE,SAMURAI_MOVES,beginBossSequence,samuraiSequence,samuraiSequenceWait,samuraiWaitMultiplier} from '../src/samurai.js';
 import {canBackThrow} from '../src/back-throw.js';
 import {enemyAnimationSample} from '../src/enemy-models.js';
+import {ATTACK_PREVIEW_LEAD,attackWarningColor} from '../src/attack-warning.js';
 const pose={x:0,z:0,height:0,heading:0,guarding:false,guardElapsed:0,invulnerable:false};
 for(const fps of [30,60,144]){
  const b=new Battle();b.reset('samurai');const e=b.enemy;e.x=0;e.z=1.6;e.heading=Math.PI;
@@ -17,7 +18,8 @@ for(const fps of [30,60,144]){
  const dx=e.x-start.x,dz=e.z-start.z;assert(dx*forward.x+dz*forward.z<0,'Dodge is not backward');
  assert(dx*Math.cos(Math.PI)-dz*Math.sin(Math.PI)>0,'Dodge is not to the samurai right');
  assert(Math.abs(Math.hypot(dx,dz)-SAMURAI_EVADE.distance)<1e-6);
- assert.equal(e.telegraph,SAMURAI_EVADE.counterPause);assert.equal(enemyAnimationSample('samurai',e,0).name,'CounterThrust');
+ const counterHitAt=Math.max(ATTACK_PREVIEW_LEAD,SAMURAI_EVADE.counterPause+e.swingDuration);
+ assert(Math.abs(e.hitAt-counterHitAt)<1e-9);assert.equal(enemyAnimationSample('samurai',e,0).name,'CounterThrust');
  let hit=0,clock=0;const entry={x:e.x,z:e.z};
  while(e.state==='windup'){
   b.update(1/fps,{...pose,invulnerable:true});clock+=1/fps;
@@ -39,10 +41,8 @@ for(const fps of [30,60,144]){
 // Red warnings and guard bypass use the same move flag for every phase.
 for(const moves of Object.values(SAMURAI_MOVES))for(const move of moves){
  const b=new Battle();b.reset('samurai');const e=b.enemy;e.x=0;e.z=1.2;e.heading=Math.PI;e.move=move;
- e.state='windup';e.telegraph=1;e.elapsed=.85;
- const unblockable=move.motion.includes('thrust')||move.motion==='buried-overhead';
- assert.equal(bossBladeWarning(e),unblockable);
- e.elapsed=.70;assert.equal(bossBladeWarning(e),false);
+ const unblockable=move.unblockable===true;
+ assert.equal(attackWarningColor(move),unblockable?'#ff3030':'#ffffff');
  const before=b.player.health;b.strikePlayer({...pose,guarding:true,guardElapsed:.01},move);
  const events=b.takeEvents();
  if(unblockable){assert(b.player.health<before);assert(!events.some(x=>x.type==='blocked'));assert(!b.player.counterReady);}

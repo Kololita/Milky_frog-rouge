@@ -30,18 +30,18 @@ for(const stats of Object.values(MONSTER_STATS)){
  }
 
 }
-function stance(elapsed=.3,angle=0){
+function stance(elapsed=.6,angle=0){
  const b=new Battle();b.reset('mirrorGuard');const e=b.enemy;e.x=0;e.z=0;e.heading=0;e.state='windup';e.move=e.stats.moves[1];e.moveIndex=1;e.elapsed=elapsed;e.telegraph=e.move.prepare;e.swingDuration=e.move.swing;e.windup=e.telegraph+e.swingDuration;
  return {b,e,pose:{x:Math.sin(angle),z:Math.cos(angle),height:0,heading:angle+Math.PI,invulnerable:false}};
 }
-for(const [elapsed,valid] of [[0,true],[.001,true],[.3,true],[.6,true],[.601,false]]){
+for(const [elapsed,valid] of [[0,false],[.499,false],[.5,true],[1.7,true],[1.701,false]]){
  const {b,e,pose}=stance(elapsed);assert.equal(b.tryEnemyParry(e,pose,ATTACK_STATS.Attack1),valid,`Parry time ${elapsed}`);
 }
 for(const angle of [-180,-131,-129,0,129,131,180]){
- const {b,e,pose}=stance(.4,angle*Math.PI/180);assert.equal(b.tryEnemyParry(e,pose,ATTACK_STATS.Attack1),Math.abs(angle)<=130,`Parry angle ${angle}`);
+ const {b,e,pose}=stance(.6,angle*Math.PI/180);assert.equal(b.tryEnemyParry(e,pose,ATTACK_STATS.Attack1),Math.abs(angle)<=130,`Parry angle ${angle}`);
 }
 for(const fps of [30,60,144]){
- const {b,e,pose}=stance(.4,110*Math.PI/180);b.beginAttack('Attack1');const health=b.player.health,guard=b.player.pose;
+ const {b,e,pose}=stance(.6,110*Math.PI/180);b.beginAttack('Attack1');const health=b.player.health,guard=b.player.pose;
  assert(b.tryEnemyParry(e,pose,ATTACK_STATS.Attack1));assert.equal(b.player.health,health);assert.equal(b.player.pose,guard);assert(!b.attack);
  assert.equal(b.takeEvents().find(event=>event.type==='playerHit').stun,1);
  let hitTime=null,damage=0;
@@ -60,14 +60,14 @@ for(const fps of [30,60,144]){
  b.enemyTime=.175;view.update(b,new THREE.PerspectiveCamera(),0);
  const root=view.monsterVisuals.entries.mirrorGuard.root,halo=root.getObjectByName('mirror_parry_halo'),shield=root.getObjectByName('mirror_shield');
  assert.equal(halo.material.color.getHex(),0xffd35a);assert(shield.position.y<-.33);assert.equal(b.takeEvents().length,0,'Visual shield push emits gameplay effects');assert.equal(e.x,0);assert.equal(e.z,0);
- b.enemyTime=.36;e.state='windup';e.elapsed=.3;view.update(b,new THREE.PerspectiveCamera(),0);assert.equal(halo.material.color.getHex(),0xa5f4ff);assert.equal(shield.position.y,-.2);
+ b.enemyTime=.36;e.state='windup';e.elapsed=.6;view.update(b,new THREE.PerspectiveCamera(),0);assert.equal(halo.material.color.getHex(),0xa5f4ff);assert.equal(shield.position.y,-.2);
 }
 {
  const {b,e,pose}=stance();b.player.rageUntil=10;b.beginAttack('Attack1');assert(b.tryEnemyParry(e,pose,ATTACK_STATS.Attack1));assert(b.attack);assert(b.takeEvents().find(event=>event.type==='playerHit').armored);
 }
 {
  const g=await gameFixture(60);g.freezeEnemy=true;
- g.read('battle.reset("mirrorGuard");battle.enemy.x=0;battle.enemy.z=1;battle.enemy.heading=Math.PI;battle.enemy.state="windup";battle.enemy.move=battle.enemy.stats.moves[1];battle.enemy.moveIndex=1;battle.enemy.elapsed=.4;battle.enemy.telegraph=0;battle.enemy.swingDuration=.6;battle.enemy.windup=.6;battle.tryEnemyParry(battle.enemy,battlePose(),ATTACK_STATS.Attack1)');
+ g.read('battle.reset("mirrorGuard");battle.enemy.x=0;battle.enemy.z=1;battle.enemy.heading=Math.PI;battle.enemy.state="windup";battle.enemy.move=battle.enemy.stats.moves[1];battle.enemy.moveIndex=1;battle.enemy.elapsed=.6;battle.enemy.telegraph=.5;battle.enemy.swingDuration=1.2;battle.enemy.windup=1.7;battle.tryEnemyParry(battle.enemy,battlePose(),ATTACK_STATS.Attack1)');
  g.tickFrames(1);assert.equal(g.read('activeGesture?.name'),'Hit');g.tick(.7);assert.equal(g.read('activeGesture?.name'),'Hit');g.tick(.4);assert.notEqual(g.read('activeGesture?.name'),'Hit');
 }
-console.log('AUTHORED_DESIGNS_VERIFIED: all 8 monster tables, spike resilience1, mirror 130-degree half-angle/0–0.6s window/1s recoil/fast 0.1s riposte/2s recovery, golden shield push and native player reaction');
+console.log('AUTHORED_DESIGNS_VERIFIED: enemy tables, spike resilience, mirror 0.5–1.7s parry window, riposte and golden feedback');

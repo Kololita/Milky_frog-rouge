@@ -14,6 +14,7 @@ import {launchEnemyProjectiles} from './enemy-projectiles.js';
 import {createMirrorReflections} from './mirror-reflections.js';
 import {ENCOUNTERS as jumpEncounters} from './encounters.js';
 import {RUN_EVENTS as jumpEvents} from './run-events.js';
+import {createRunStartUI} from './run-start.js';
 import {NODE_LABELS} from './run-map.js';
 import {createTutorial,TUTORIAL_SECTIONS} from './tutorial.js';
 import {loadEnemyModels} from './enemy-models.js';
@@ -47,6 +48,7 @@ import {randomHomeArt} from './home-art.js';
 import {createSettings} from './settings.js';
 import {createRestSite} from './rest-site.js';
 import {createRunUI} from './run-ui.js';
+import {createRunSaveStore} from './run-save.js';
 import {createHitboxView} from './hitbox-view.js';
 import {createEquipmentMenu} from './equipment.js';
 import {createDeveloperSettings} from './developer-settings.js';
@@ -292,7 +294,7 @@ const equipmentMenu=createEquipmentMenu(document,window,{
   equip:loadout=>{battle.applyEquipment(loadout);battleHUD.update(battle);},
   canOpen:()=>!inPractice||battle.encounter.kind==='training',
   onOpen(){keys.clear();shiftTap.reset();blockButtonHeld=false;blockQueuedAt=null;releaseBlock({immediate:true});pointerX=undefined;menuOpenedAt=performance.now()/1000;},
-  onClose(){resumeMenuTimers();},
+  onClose(){resumeMenuTimers();runGame?.refreshEvent();restSite.refresh();},
 });
 function resumeMenuTimers(){
   const duration=performance.now()/1000-menuOpenedAt;
@@ -314,8 +316,9 @@ function showHome(){
   if(!homeScreen)return;
   runGame?.abandon();restSite.close();document.getElementById('app').classList.remove('on-map','on-rest');
   cameraOcclusion.clear();combatCamera.reset();
-  clearInput();battle.reset('practice');arenaView.setMode('practice');returnToOrigin();inPractice=false;homeScreen.hidden=false;
+  clearInput();battle.reset('practice',{runHealthBonus:0});arenaView.setMode('practice');returnToOrigin();inPractice=false;homeScreen.hidden=false;
   document.getElementById('app').classList.add('on-home');
+  updateHomeRunButtons();
   clearCombatEffects();
   refreshHomeArt();
   orbit.yaw=Math.PI;orbit.distance=5.5;updateCamera();
@@ -325,8 +328,8 @@ function enterArena(mode='practice',{run=false,floor=1}={}){
   if(!loaded)return;
   if(!run)runGame?.abandon();restSite.close();document.getElementById?.('app')?.classList.remove('on-map','on-rest');
   cameraOcclusion.clear();combatCamera.reset();
-  settings.close();battle.reset(mode,{floor});
   const mapRun=run?runGame?.run:null;
+  settings.close();battle.reset(mode,{floor,runHealthBonus:mapRun?.startingBoon?.health??0});
   if(mapRun)for(const enemy of battle.enemies)enemy.seed=deriveSeed(mapRun.seedFor('enemy-ai'),enemy.id);
   blinkRandom=mapRun?seededRandom(mapRun.seedFor('blink')):Math.random;
   blinkCountdown=nextBlinkDelay(blinkRandom);
@@ -360,16 +363,40 @@ const arenaMenu=createArenaMenu(document,{select:mode=>{equipmentMenu.sandbox({m
 let finishArtisan;
 const artisanWorkshop=createHingeWorkshop(document,{equipment:()=>equipmentMenu,finish:()=>finishArtisan?.(),dialogId:'artisan-workshop'});
 const shopWorkshop=createHingeWorkshop(document,{equipment:()=>equipmentMenu,dialogId:'shop-workshop'});
+const runSave=createRunSaveStore({
+  getItem:key=>(window.naiwaSettings??window.localStorage).getItem(key),
+  setItem:(key,value)=>(window.naiwaSettings??window.localStorage).setItem(key,value),
+});
+function reportSaveError(){window.alert('无法保存远征进度，请检查本地存储是否可用。');}
 runGame=createRunUI(document,{
+  saveStore:runSave,
+  getAssembly:()=>equipmentMenu.assembly,
+  onSaveError:reportSaveError,
   eventState:()=>({health:battle.player.health,maxHealth:battle.maxHealth,potions:battle.player.potions,capacity:battle.potionCapacity}),
   applyEvent:effect=>{battle.player.health=effect.health;battle.player.potions=effect.potions;if(effect.item)equipmentMenu.grant(effect.item,effect.roll);battleHUD.update(battle);},
-  onNew(){equipmentMenu.startRun();battle.reset('practice');restoreStanding({clearKeys:true});},
+  onNew(save,progress){
+   equipmentMenu.startRun(save?.assembly??progress.startingAssembly,progress.inventory,{fixedUltimate:progress.startingUltimate});
+   battle.reset('practice',{floor:1,runHealthBonus:progress.startingBoon?.health??0});
+   if(save){
+    battle.player.health=Math.max(0,Math.min(battle.maxHealth,save.player.health));
+    battle.player.potions=Math.max(0,Math.min(battle.potionCapacity,save.player.potions));
+   }else battle.player.potions=Math.max(0,battle.player.potions-(progress.startingBoon?.potionCost??0));
+   battleHUD.update(battle);
+   restoreStanding({clearKeys:true});
+  },
   onMap(){restSite.close();document.getElementById('app').classList.remove('on-rest');clearCombatEffects();targetLock.clear();inPractice=false;if(homeScreen)homeScreen.hidden=true;document.getElementById('app').classList.add('on-map');},
   prepare(node,start,cancel){equipmentMenu.open({beforeBattle:true,onStart:start,onCancel:cancel});},
-  startBattle(node){const health=battle.player.health,potions=battle.player.potions;enterArena(node.encounter,{run:true,floor:node.layer+1});battle.player.health=Math.min(battle.maxHealth,health);battle.player.energy=0;battle.player.potions=potions;},
-  enterRest:leave=>openRestSite(leave),
-  award:(item,roll)=>equipmentMenu.grant(item.id,roll),
+  startBattle(node,opening={energy:0,enemyHealthFactor:1}){
+   const health=battle.player.health,potions=battle.player.potions;
+   enterArena(node.encounter,{run:true,floor:node.layer+1});
+   battle.player.health=Math.min(battle.maxHealth,health);
+   battle.player.energy=opening.energy;battle.player.potions=potions;
+   if(opening.enemyHealthFactor!==1)for(const enemy of battle.enemies)enemy.health=enemy.maxHealth=Math.round(enemy.maxHealth*opening.enemyHealthFactor*100)/100;
+  },
+  enterRest:(leave,options)=>openRestSite(leave,options),
+  award:(item,roll,upgrade)=>equipmentMenu.grant(item.id,roll,upgrade),
   openInventory:()=>equipmentMenu.open(),
+  openSettings:()=>settings.open(),
   shopWorkshop,
   openArtisan(done){finishArtisan=done;return artisanWorkshop.open({onlyTrim:true});},
   onExit(){showHome();},
@@ -393,12 +420,57 @@ for(const [type,label] of Object.entries(NODE_LABELS)){
 }
 document.getElementById('developer-jump-go').addEventListener('click',()=>{if(!loaded)return;settings.close();equipmentMenu.close();tutorial.stop();restSite.close();clearInput();runGame.jump(jumpEntries[Number(jumpSelect.value)]);});
 
-document.getElementById?.('home-new-game')?.addEventListener('click',()=>{if(loaded)runGame?.start();});
+const homeNewGame=document.getElementById('home-new-game'),homeContinue=document.getElementById('home-continue-game');
+const newGameDialog=document.getElementById('new-game-dialog'),discardGameDialog=document.getElementById('discard-game-dialog');
 const customGameButton=document.getElementById('home-custom-game');
 const customGameDialog=document.getElementById('custom-game-dialog');
 const customGameForm=document.getElementById('custom-game-form');
 const customGameSeed=document.getElementById('custom-game-seed');
 const customGameError=document.getElementById('custom-game-error');
+const runStart=createRunStartUI(document,{
+  start(seed,setup){
+    if(!loaded||runSave.read()){homeScreen.hidden=false;updateHomeRunButtons();return;}
+    runGame.start(seed,setup);
+  },
+  back(){
+    homeScreen.hidden=false;
+    if(runSave.read()){updateHomeRunButtons();homeContinue.focus();return;}
+    newGameDialog.showModal();
+  },
+});
+function openRunStart(seed){
+  if(!runStart)return;
+  newGameDialog.close();
+  homeScreen.hidden=true;
+  runStart.open(seed);
+}
+function updateHomeRunButtons(){
+  const hasSave=Boolean(runSave.read());
+  homeContinue.hidden=!hasSave;homeContinue.disabled=!loaded;
+  homeNewGame.disabled=!loaded;homeNewGame.textContent=hasSave?'放弃当前游戏':'开始新游戏';
+  homeNewGame.classList.toggle('home-primary',!hasSave);
+}
+homeNewGame.addEventListener('click',()=>{
+  if(!loaded)return;
+  (runSave.read()?discardGameDialog:newGameDialog).showModal();
+});
+homeContinue.addEventListener('click',()=>{
+  if(!loaded)return;
+  const save=runSave.read();
+  if(!save){updateHomeRunButtons();return;}
+  try{runGame.resume(save);}
+  catch(error){console.error(error);showHome();window.alert('无法读取此远征存档。');}
+});
+document.getElementById('discard-game-cancel').addEventListener('click',()=>discardGameDialog.close());
+document.getElementById('discard-game-confirm').addEventListener('click',()=>{
+  if(!runSave.clear()){reportSaveError();return;}
+  discardGameDialog.close();updateHomeRunButtons();homeNewGame.focus();
+});
+document.getElementById('new-game-cancel').addEventListener('click',()=>newGameDialog.close());
+document.getElementById('home-random-game').addEventListener('click',()=>{
+  if(!loaded||runSave.read())return;
+  openRunStart();
+});
 function clearSeedError(){
   customGameError.hidden=true;
   customGameSeed.removeAttribute('aria-invalid');
@@ -414,28 +486,38 @@ customGameSeed?.addEventListener('input',clearSeedError);
 customGameDialog?.addEventListener('keydown',event=>event.stopPropagation());
 customGameForm?.addEventListener('submit',event=>{
   event.preventDefault();
-  if(!loaded)return;
+  if(!loaded||runSave.read())return;
   if(!customGameSeed.validity.valid){
     customGameError.hidden=false;
     customGameSeed.setAttribute('aria-invalid','true');
     customGameSeed.focus();
     return;
   }
-  customGameDialog.close();
-  runGame.start(customGameSeed.value);
+  const seed=customGameSeed.value;
+  customGameDialog.close();openRunStart(seed);
 });
 
 document.getElementById?.('potion-use')?.addEventListener('click',()=>{if(inPractice&&!settings.opened&&!equipmentMenu.opened)battle.usePotion();});
 
-document.getElementById?.('home-settings')?.addEventListener('click',()=>settings.open());
-document.getElementById?.('return-home')?.addEventListener('click',()=>{settings.close();showHome();});
+const saveAndExit=document.getElementById('return-home');
+const openHomeSettings=document.getElementById('home-settings');
+openHomeSettings?.addEventListener('click',()=>settings.open());
+document.getElementById('settings-dialog')?.addEventListener('toggle',event=>{
+  if(event.newState==='open'&&saveAndExit)saveAndExit.hidden=!homeScreen.hidden;
+});
+document.getElementById?.('return-home')?.addEventListener('click',()=>{
+  if(!runGame.save()){reportSaveError();return;}
+  settings.close();showHome();
+});
+window.addEventListener('pagehide',()=>runGame.save());
+window.addEventListener('storage',()=>{if(!homeScreen.hidden)updateHomeRunButtons();});
 
-function openRestSite(leave){
+function openRestSite(leave,options){
   clearCombatEffects();inPractice=false;homeScreen.hidden=true;targetLock.clear();arenaView.setMode('practice');
   document.getElementById('app').classList.remove('on-map');document.getElementById('app').classList.add('on-rest');
   player.position.set(0,0,0);heading=0;player.rotation.y=0;modelPivot.position.y=.265;
   mixer.stopAllAction();bodyBlend.reset();currentAction=undefined;switchAction('Sit',true);actions.Sit.paused=true;actions.Sit.time=Math.min(2.3,actions.Sit.getClip().duration);mixer.update(0);
-  for(const view of enemyViews)view.group.visible=false;lockRing.visible=lockArrow.visible=false;restSite.open(battle,leave);
+  for(const view of enemyViews)view.group.visible=false;lockRing.visible=lockArrow.visible=false;restSite.open(battle,leave,options);
 }
 function clearCombatEffects(){
   battle.clearBattleEffects();restoreStanding({clearKeys:true});pointerX=undefined;
@@ -1317,8 +1399,7 @@ async function loadPlayer() {
     document.getElementById('startup-loading')?.remove();if(homeScreen)homeScreen.hidden=false;
     const tutorialButton=document.getElementById("home-tutorial");if(tutorialButton)tutorialButton.disabled=false;
     if(practiceButton){practiceButton.disabled=false;practiceButton.textContent='练习场';}
-    const newButton=document.getElementById?.('home-new-game');if(newButton)newButton.disabled=false;
-    if(customGameButton)customGameButton.disabled=false;
+    updateHomeRunButtons();
     arenaMenu.setReady();document.getElementById('developer-jump-go').disabled=false;document.getElementById('developer-equipment-get').disabled=false;
     if(!inPractice){orbit.yaw=Math.PI;updateCamera();}
     mixer.addEventListener('finished', event => {

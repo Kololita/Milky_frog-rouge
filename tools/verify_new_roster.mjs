@@ -40,7 +40,12 @@ for(const id of ['mirrorGuard','samurai','scythemoth','spitter']){
  const battle=new Battle();battle.reset(id);const e=battle.enemy,view=createEnemyView(new THREE.Scene()),camera=new THREE.PerspectiveCamera();
  const move=id==='samurai'?Object.values((await import('../src/samurai.js')).SAMURAI_MOVES)[0][0]:battle.enemyStats.moves[0];
  Object.assign(e,{move,state:'windup',elapsed:move.prepare+move.swing*.7,telegraph:move.prepare,swingDuration:move.swing,windup:move.windup,flash:0});view.update(battle,camera,1/60);const root=view.monsterVisuals.entries[id].root;
- if(id==='mirrorGuard'){e.move=battle.enemyStats.moves[1];e.elapsed=.1;view.update(battle,camera,1/60);assert(root.getObjectByName('mirror_parry_halo').visible);e.parryGlowUntil=1;e.parryFeedbackStart=0;view.update(battle,camera,1/60);assert.equal(root.getObjectByName('mirror_parry_halo').material.color.getHex(),0xd7b866);}
+ if(id==='mirrorGuard'){
+  e.move=battle.enemyStats.moves[1];const halo=root.getObjectByName('mirror_parry_halo');
+  e.elapsed=.1;view.update(battle,camera,1/60);assert(!halo.visible);
+  e.elapsed=e.move.parryStart;view.update(battle,camera,1/60);assert(halo.visible);
+  e.parryGlowUntil=1;e.parryFeedbackStart=0;view.update(battle,camera,1/60);assert.equal(halo.material.color.getHex(),0xd7b866);
+ }
  if(id==='samurai'){assert(root.getObjectByName('samurai_blade_trail').visible);const blade=root.getObjectByName('samurai_blade');assert.equal(blade.material.emissive.getHex(),0xc32d24);e.state='idle';view.update(battle,camera,1/60);assert(!root.getObjectByName('samurai_blade_trail').visible);assert.equal(blade.material.emissive.getHex(),0x345c86);}
  if(id==='scythemoth'){assert(root.getObjectByName('mantis_left_trail').visible);assert(!root.getObjectByName('mantis_right_trail').visible);}
  if(id==='spitter'){e.elapsed=move.prepare*.9;view.update(battle,camera,1/60);assert(root.getObjectByName('spitter_muzzle_charge').visible);}

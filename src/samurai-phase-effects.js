@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {SAMURAI_TRANSITION,samuraiStrikeActive} from './samurai.js';
+import {ATTACK_PREVIEW_LEAD,attackWarningActive,attackWarningColor,attackWarningStart,warningPulseGLSL} from './attack-warning.js';
 
 function windingGlow(start,end,{strands,coreRadius,haloRadius,speed,coreColor,haloColor}){
  const group=new THREE.Group();
@@ -171,13 +172,16 @@ export function createSamuraiPhaseEffects(root){
  }
  const ground=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.ShaderMaterial({
   transparent:true,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,
-  uniforms:{groundPhase:{value:new THREE.Vector3()},groundRadius:{value:1},clock:{value:0}},
+  uniforms:{groundPhase:{value:new THREE.Vector3()},groundRadius:{value:1},clock:{value:0},warningTint:{value:new THREE.Color()}},
   vertexShader:'varying vec2 p;uniform float groundRadius;void main(){p=uv*2.-1.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position*groundRadius,1.);}',
-  fragmentShader:`varying vec2 p;uniform vec3 groundPhase;uniform float clock;void main(){
-   float power=groundPhase.z>0.? .12+.2*min(1.,groundPhase.x/max(.01,groundPhase.y)):max(0.,1.-groundPhase.x/.65);
+  fragmentShader:`varying vec2 p;uniform vec3 groundPhase,warningTint;uniform float clock;
+  ${warningPulseGLSL}
+  void main(){
+   float power=groundPhase.z>0.? .12+.2*min(1.,groundPhase.x/max(.01,groundPhase.y))+.28*warningPulse(groundPhase.y-groundPhase.x):max(0.,1.-groundPhase.x/.65);
    float r=length(p),a=atan(p.y,p.x);float rim=exp(-pow((r-.94)/.035,2.));
    float veins=pow(max(0.,sin(a*13.+r*17.-clock*12.)),18.)*(1.-smoothstep(.3,1.,r));
-   gl_FragColor=vec4(.48,.82,.58,(rim*.7+veins*.6)*power);
+   vec3 tint=groundPhase.z>0.?warningTint:vec3(.48,.82,.58);
+   gl_FragColor=vec4(tint,(rim*.7+veins*.6)*power);
    #include <tonemapping_fragment>
    #include <colorspace_fragment>
   }`,
@@ -198,12 +202,14 @@ export function createSamuraiPhaseEffects(root){
   const age=time-(e.lightningAt??-Infinity);
   bolt.visible=Boolean(alive&&blade&&age>=0&&age<.32);
   if(bolt.visible)boltAge.value=age;
-  const preparing=e.state==='transition'&&!e.transitionHit;
+  const preparing=e.state==='transition'&&!e.transitionHit&&attackWarningActive(e.elapsed,e.transitionStrikeAt);
   ground.visible=alive&&(preparing||age>=0&&age<.65);
   if(ground.visible){
+   if(preparing)ground.material.uniforms.warningTint.value.set(attackWarningColor(e.move));
    ground.material.uniforms.groundRadius.value=SAMURAI_TRANSITION.radius;
    ground.material.uniforms.clock.value=time;
-   ground.material.uniforms.groundPhase.value.set(preparing?e.elapsed:age,e.transitionStrikeAt??0,preparing?1:0);
+   const warningElapsed=preparing?Math.max(0,e.elapsed-attackWarningStart(e.transitionStrikeAt)):age;
+   ground.material.uniforms.groundPhase.value.set(warningElapsed,ATTACK_PREVIEW_LEAD,preparing?1:0);
   }
  }};
 }

@@ -1,40 +1,28 @@
+export const attackWarningColor=attack=>attack?.unblockable?'#ff3030':'#ffffff';
+export const ATTACK_PREVIEW_LEAD=1;
+const FLASH_OFFSET=.2;
+const FLASH_DURATION=.15;
+export const attackWarningStart=impactAt=>Math.max(0,impactAt-ATTACK_PREVIEW_LEAD);
+export function attackWarningActive(elapsed,impactAt){
+ return Number.isFinite(impactAt)&&elapsed>=attackWarningStart(impactAt)-1e-9&&elapsed<impactAt-1e-9;
+}
+export const recoveryStrikeTime=strike=>Math.max(strike.at,ATTACK_PREVIEW_LEAD);
+
 export function attackWarningRemaining(enemy){
- if(enemy.state!=='windup')return -1;
- const cue=enemy.move?.contactPhase!=null?enemy.hitAt:enemy.telegraph;
+ if(enemy.state!=='windup'||enemy.move?.skipWarning)return -1;
+ const cue=enemy.hitAt??enemy.telegraph;
  return Number.isFinite(cue)?cue-enemy.elapsed:-1;
 }
 
-/** One brightness pulse during the final 150ms before the swing. */
+/** The warning brightens once, from 350 to 200 ms before impact. */
 export function attackWarningPulse(enemy){
- const remaining=attackWarningRemaining(enemy);
- if(!Number.isFinite(remaining)||remaining<=0||remaining>.15)return 0;
- return Math.sin(Math.PI*(1-remaining/.15));
+ const remaining=attackWarningRemaining(enemy)-FLASH_OFFSET;
+ if(remaining<=0||remaining>=FLASH_DURATION)return 0;
+ return Math.sin(Math.PI*(1-remaining/FLASH_DURATION));
 }
 
 export const warningPulseGLSL=`
 float warningPulse(float remaining) {
- return remaining>0. && remaining<=.15 ? sin(3.14159265*(1.-remaining/.15)) : 0.;
+ remaining-=${FLASH_OFFSET};
+ return remaining>0. && remaining<${FLASH_DURATION} ? sin(3.14159265*(1.-remaining/${FLASH_DURATION})) : 0.;
 }`;
-
-const bladeTimings=new WeakMap();
-export function setBladeWarningTiming(material,remaining){
- let timing=bladeTimings.get(material);
- if(!timing){
-  timing={value:remaining};
-  bladeTimings.set(material,timing);
-  const compile=material.onBeforeCompile;
-  const cacheKey=material.customProgramCacheKey();
-  material.customProgramCacheKey=()=>cacheKey+'|blade-warning-pulse';
-  material.onBeforeCompile=function(shader,renderer){
-   compile.call(this,shader,renderer);
-   shader.uniforms.bladeWarningRemaining=timing;
-   shader.fragmentShader='uniform float bladeWarningRemaining;\n'+warningPulseGLSL+'\n'+
-    shader.fragmentShader.replace('#include <emissivemap_fragment>',`
-      #include <emissivemap_fragment>
-      totalEmissiveRadiance*=1.+1.5*warningPulse(bladeWarningRemaining);
-    `);
-  };
-  material.needsUpdate=true;
- }
- timing.value=remaining;
-}

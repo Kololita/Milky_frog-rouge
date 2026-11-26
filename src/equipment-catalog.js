@@ -10,8 +10,8 @@ export const EQUIPMENT=[
  {id:'shield',slot:'skill',rarity:'purple',name:'护盾',description:'消耗50能量，获得50护盾',icon:'shield'},
  {id:'drain',slot:'skill',rarity:'blue',name:'汲能',description:'失去最大生命30%，30秒每秒获得3能量',icon:'drain'},
  {id:'focus',slot:'skill',rarity:'blue',name:'聚能',description:'消耗35能量，获得一次金光',icon:'focus'},
- {id:'rage',slot:'ultimate',rarity:null,droppable:true,name:'狂暴',description:'消耗100能量，进入狂暴形态',icon:'rage'},
- {id:'fistwind',slot:'ultimate',rarity:null,droppable:true,name:'拳风',description:'消耗100能量，30秒内拳掌附带0.3倍率劲风',icon:'fistwind'},
+ {id:'rage',slot:'ultimate',rarity:null,droppable:false,name:'狂暴',profession:'赤焰斗士',description:'消耗100能量，获得霸体、加快攻击，命中时恢复生命',icon:'rage'},
+ {id:'fistwind',slot:'ultimate',rarity:null,droppable:false,name:'拳风',profession:'御风拳师',description:'消耗100能量，30秒内拳掌附带0.3倍率劲风',icon:'fistwind'},
  ...EQUIPMENT_DATA,
 ];
 

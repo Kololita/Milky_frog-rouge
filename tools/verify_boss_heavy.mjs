@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {Battle} from '../src/battle.js';
-import {beginBossSequence,SAMURAI_RECOVERY,SAMURAI_AIM,bossBladeWarning} from '../src/samurai.js';
+import {beginBossSequence,SAMURAI_RECOVERY,SAMURAI_AIM} from '../src/samurai.js';
 import {canBackThrow} from '../src/back-throw.js';
 import {createEnemyView} from '../src/enemy-view.js';
+import {attackWarningActive,attackWarningColor,attackWarningStart} from '../src/attack-warning.js';
 const pose={x:0,z:-1.4,heading:0,height:0,invulnerable:true};
 const waits=[];
 for(const fps of [30,60,144])for(const phase of [1,2]){
  const b=new Battle();b.reset('samurai');const e=b.enemy;e.x=e.z=e.heading=0;e.phase=phase;beginBossSequence(b,'heavy');
- assert.equal(e.telegraph,3);e.elapsed=2.799;assert(!bossBladeWarning(e));e.elapsed=2.8;assert(bossBladeWarning(e));e.elapsed=0;
+ assert.equal(e.telegraph,3);
+ const warningAt=attackWarningStart(e.hitAt);
+ assert(!attackWarningActive(warningAt-.001,e.hitAt));
+ assert(attackWarningActive(warningAt,e.hitAt));
+ assert.equal(attackWarningColor(e.move),'#ff3030');
  let swings=0;
  while(e.state==='windup'){
   const previous=e.heading;b.update(1/fps,pose);
@@ -32,7 +37,7 @@ for(const name of ['quick','delay','mixed','thrust','sweep']){
  for(const t of [.01,e.telegraph+.05]){
   e.elapsed=t;const p={...pose,x:2,z:1};const expected=Math.atan2(p.x-e.x,p.z-e.z);b.update(.001,p);assert(Math.abs(e.heading-expected)<1e-9);
  }
- e.elapsed=e.telegraph-.201;assert(!bossBladeWarning(e));e.elapsed=e.telegraph-.199;assert(bossBladeWarning(e));
+ assert.equal(attackWarningColor(e.move),'#ffffff');
 }
 for(let seed=1;seed<15;seed++){
  const b=new Battle();b.reset('samurai');const e=b.enemy;e.seed=seed*7281;e.x=e.z=0;beginBossSequence(b,'quick');
@@ -51,4 +56,4 @@ assert(new Set(waits).size>10);
  assert(heights[2]>heights[1]+.15&&heights[3]>heights[2]+.05,'Charge stops raising the sword');
  assert(heights[5]<heights[3]-.7,'Downstroke lacks amplitude');
 }
-console.log('BOSS_HEAVY_VERIFIED: 3s cue, limited heavy tracking, 1–2s planted sword opening, live attack tracking, 200ms warning and random 2–6s waits');
+console.log('BOSS_HEAVY_VERIFIED: 3s cue, limited heavy tracking, planted sword opening, live attack tracking and 800ms warning');

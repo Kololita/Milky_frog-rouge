@@ -5,6 +5,7 @@ import {StatusEffects} from './status-effects.js';
 import {passiveLevels,concentrationTimeScale} from './equipment-passives.js';
 import {Monster} from './monster.js';
 import {isDamagingMove} from './enemy-move.js';
+import {MOB_RULES} from './monster-rules.js';
 import {PLAYER_STATS,POSE_STATS,LAUGH_STATS,GUARD_STATS,ENEMY_STATS,ATTACK_STATS,IMPACT_LEVELS,ENERGY_STATS,RAGE_STATS,WAVE_STATS,energyDamageMultiplier,effectiveImpactLevel,playerImpactReaction} from './battle-values.js';
 import {guardTier,dodgeInvulnerable} from './defense.js';
 import {equipmentBonuses,normalizeEquipmentLoadout} from './equipment.js';
@@ -33,7 +34,8 @@ export function inAttackArea(origin,heading,target,range,halfAngle,targetRadius=
 /** Renderer-independent encounter. Each authored impact can hit at most once. */
 export class Battle {
   constructor(){this.enabled=true;this.reset();}
-  reset(mode=this.mode??'practice',{floor=this.encounterFloor??1}={}) {
+  reset(mode=this.mode??'practice',{floor=this.encounterFloor??1,runHealthBonus=this.runHealthBonus??0}={}) {
+    this.runHealthBonus=runHealthBonus;
     this.tookEnemyHealthDamage=false;this.runAttackLockUntil=0;this.counterOrbOrigin=null;this.counterCharge=null;this.pendingChargeMultiplier=1;this.drinking=null;this.encounterFloor=Math.max(1,Math.floor(floor));
     this.encounter=encounterFor(mode);this.mode=this.encounter.id;this.coolingValves=createCoolingState(this.mode);this.sceneryColliders=createFoundryColliders(this.mode);this.enemyStats=this.encounter.stats;
     this.groupAggressor=null;this.groupAggroChangedAt=-Infinity;this.time=0;this.enemyTime=0;this.windQueue=[];this.events=[];this.attack=null;this.absorption=null;this.breakLaugh=null;this.backThrow=null;this.defeated=0;
@@ -80,7 +82,7 @@ export class Battle {
   }
   get potionCapacity(){return POTION_STATS.capacity+(this.passives?.flasks??0);}
   get maxPose(){return Math.max(1,PLAYER_STATS.pose+(this.gear?.pose??0));}
-  get maxHealth(){return PLAYER_STATS.health+(this.gear?.health??0);}
+  get maxHealth(){return PLAYER_STATS.health+this.runHealthBonus+(this.gear?.health??0);}
   usePotion(){
     const p=this.player;
     if(p.health<=0||p.health>=this.maxHealth||p.potions<=0||this.breakLaugh||this.backThrow||this.drinking)return false;
@@ -297,16 +299,18 @@ export class Battle {
       for(const enemy of this.enemies){
         if(!enemy.damageable||!overlapsHeight(volume,enemy,enemy.bodyHeight))continue;
         if(!inAttackArea(pose,pose.heading,enemy,stats.range*this.attackRangeMultiplier,stats.halfAngle,enemy.radius))continue;
-        if(this.tryEnemyParry(enemy,pose,stats))return;
+        if(this.tryEnemyParry(enemy,pose,stats,{contact:true}))return;
         this.damageEnemy(enemy,damage,{label:stats.label,impactLevel:stats.impactLevel,origin:pose,source:stats.radial?'slam':'melee'});
       }
     }
   }
   get currentAttackStats(){return this.attack?ATTACK_STATS[this.attack.name]:null;}
-  tryEnemyParry(enemy,pose,attack){
+  tryEnemyParry(enemy,pose,attack,{contact=false}={}){
     const stance=enemy.move;
-    if(!isDamagingMove(attack)||attack.kind==='projectile'||enemy.state!=='windup'||stance?.kind!=='parry'||Math.hypot(pose.x-enemy.x,pose.z-enemy.z)>stance.reach||attack.radial||attack.impactLevel>stance.maxParryImpact||enemy.elapsed<stance.parryStart||enemy.elapsed>stance.parryEnd)return false;
-    if(!inAttackArea(enemy,enemy.heading,pose,Infinity,stance.halfAngle)||!overlapsHeight(attackHeight(enemy,stance),pose,PLAYER_STATS.bodyHeight))return false;
+    if(!isDamagingMove(attack)||attack.kind==='projectile'||attack.projectile||enemy.state!=='windup'||stance?.kind!=='parry')return false;
+    if(enemy.elapsed<stance.parryStart-1e-9||enemy.elapsed>stance.parryEnd+1e-9)return false;
+    if(!inAttackArea(enemy,enemy.heading,pose,contact?Infinity:stance.reach,stance.halfAngle))return false;
+    if(!contact&&(attack.radial||!overlapsHeight(attackHeight(enemy,stance),pose,PLAYER_STATS.bodyHeight)))return false;
     enemy.counterPending=stance.counterIndex;enemy.counterTargetHeading=Math.atan2(pose.x-enemy.x,pose.z-enemy.z);enemy.parryFeedbackStart=this.enemyTime;enemy.parryFeedbackDuration=stance.feedbackDuration;enemy.parryGlowUntil=this.enemyTime+stance.feedbackDuration;enemy.nextParryAt=this.enemyTime+stance.cooldown;
     enemy.state='recover';enemy.elapsed=0;enemy.recovery=stance.counterDelay;enemy.linkRecovery=false;
     const armored=this.isRaging();if(!armored)this.cancelAttack();
@@ -459,15 +463,21 @@ export class Battle {
     const live=this.enemies.filter(e=>e.health>0);
     if(live.length<2){this.groupAggressor=live[0]??null;return;}
     const distance=e=>Math.hypot(e.x-pose.x,e.z-pose.z);
-    const busy=live.find(e=>e.state==='windup'&&isDamagingMove(e.move));
-    if(busy){this.groupAggressor=busy;return;}
     const nearest=live.reduce((a,b)=>distance(a)<distance(b)?a:b);
     if(!live.includes(this.groupAggressor)){this.groupAggressor=nearest;this.groupAggroChangedAt=this.enemyTime;return;}
     const current=distance(this.groupAggressor),next=distance(nearest);
     if(nearest!==this.groupAggressor&&this.enemyTime-this.groupAggroChangedAt>=1&&current-next>=1.5&&next<current*.65){this.groupAggressor=nearest;this.groupAggroChangedAt=this.enemyTime;}
   }
   get movementObstacles(){return this.enemies.concat(this.sceneryColliders??[]);}
-  canEnemyAttack(enemy,move){return this.enemies.filter(e=>e.health>0).length<2||!isDamagingMove(move)||enemy===this.groupAggressor;}
+  canEnemyChase(enemy){return !this.groupAggressor?.alive||enemy===this.groupAggressor;}
+  canEnemyAttack(enemy,move,distance){
+    if(this.canEnemyChase(enemy)||!isDamagingMove(move))return true;
+    const sample=enemy.playerSample;
+    const range=distance??(sample?Math.hypot(enemy.x-sample.x,enemy.z-sample.z):Infinity);
+    const reach=(move.reach??0)+PLAYER_STATS.radius+(move.lunge??0);
+    const ranged=move.kind==='projectile'||move.kind==='channel';
+    return range<=(ranged?Math.min(reach,MOB_RULES.groupRangedRange):reach);
+  }
   updateEnemy(worldDt,pose){
     const origin={x:this.enemy.x,z:this.enemy.z};
     this.enemy.update(this,worldDt,pose);

@@ -1,6 +1,6 @@
 import {createFlames,updateWaterClip,waterClipGLSL} from './flame-view.js';
-import {attackWarningRemaining,setBladeWarningTiming} from './attack-warning.js';
-import {bossBladeWarning,samuraiStrikeActive} from './samurai.js';
+import {ATTACK_PREVIEW_LEAD,attackWarningActive,attackWarningColor,attackWarningPulse,attackWarningStart,recoveryStrikeTime} from './attack-warning.js';
+import {samuraiStrikeActive} from './samurai.js';
 import {createSamuraiPhaseEffects} from './samurai-phase-effects.js';
 import {MOB_RULES} from './monster-rules.js';
 import * as THREE from 'three';
@@ -190,8 +190,10 @@ function stonekeeper(root){
  fissures.rotation.x=-Math.PI/2;fissures.visible=false;root.add(fissures);
  return (e,time)=>{
   const swinging=e.swingDuration??0;
-  const extracting=e.state==='recover'&&e.move?.recoveryStrike&&e.elapsed>=e.move.recoveryStrike.at;
-  const age=extracting?e.elapsed-e.move.recoveryStrike.at:e.state==='recover'?e.elapsed+swinging*(1-MOB_RULES.hitProgress):e.elapsed-e.telegraph-swinging*MOB_RULES.hitProgress;
+  const release=e.move?.recoveryStrike;
+  const releaseAt=release?recoveryStrikeTime(release):Infinity;
+  const extracting=e.state==='recover'&&e.elapsed>=releaseAt;
+  const age=extracting?e.elapsed-releaseAt:e.state==='recover'?e.elapsed+swinging*(1-MOB_RULES.hitProgress):e.elapsed-e.telegraph-swinging*MOB_RULES.hitProgress;
   const struck=Boolean(e.hitResolved),progress=struck?clamp(age/.5):0;
   const show=active(e)&&['quake','smash','stomp'].includes(e.move?.motion)&&progress<1;
   const radius=extracting?e.move.recoveryStrike.attack.reach:e.move?.motion==='smash'?1:e.move?.reach??1.8;
@@ -255,7 +257,9 @@ function mirrorGuard(root){
  const halo=ring(root,'mirror_parry_halo','#a7bbc2');halo.scale.set(.28,.38,1);
  const trail=weaponTrail(root,'mirror_blade_trail','#afb6b9');
  return (e,time,prep,strike,recover,model)=>{
-  const success=time<(e.parryGlowUntil??-Infinity),parry=e.move?.kind==='parry'&&e.state==='windup';halo.visible=success||parry;halo.material.color.set(success?'#d7b866':'#a7bbc2');halo.material.opacity=success?.7:.32;halo.material.uniforms.clock.value=time;
+  const success=time<(e.parryGlowUntil??-Infinity);
+  const parry=e.move?.kind==='parry'&&e.state==='windup'&&e.elapsed>=e.move.parryStart&&e.elapsed<=e.move.parryEnd;
+  halo.visible=success||parry;halo.material.color.set(success?'#d7b866':'#a7bbc2');halo.material.opacity=success?.7:.32;halo.material.uniforms.clock.value=time;
   const shield=model?.getObjectByName('shield');if(shield){root.updateWorldMatrix(true,false);shield.getWorldPosition(halo.position);root.worldToLocal(halo.position);halo.position.z+=.10;}else halo.position.set(-.35,1.10,.35);
   trail.update(model,'blade',.82,e.state==='windup'&&e.elapsed>=e.telegraph&&e.move?.kind==='melee');
   const plate=model?.getObjectByName('mirrorGuard_shield');if(plate){plate.visible=true; const materials=Array.isArray(plate.material)?plate.material:[plate.material];for(const mat of materials){mat.emissive.set(success?'#c2973d':'#168aff');mat.emissiveIntensity=success?.65:e.move?.motion==='shield-throw'&&e.state==='windup'?.8:.08;}}
@@ -264,30 +268,9 @@ function mirrorGuard(root){
 function samurai(root){
  const trail=weaponTrail(root,'samurai_blade_trail','#9faebb');
  const phaseEffects=createSamuraiPhaseEffects(root);
- let previousModel,previousWarning;
- const bladeMaterials=new Set();
  return (e,time,prep,strike,recover,model)=>{
   phaseEffects.update(e,time,model);
-  const swinging=samuraiStrikeActive(e),warning=bossBladeWarning(e);
-  trail.update(model,'blade',1.70,swinging);
-  if(model!==previousModel){
-   previousModel=model;previousWarning=undefined;bladeMaterials.clear();
-   model?.getObjectByName('samurai_blade')?.traverse(part=>{
-    if(!part.isMesh)return;
-    for(const mat of Array.isArray(part.material)?part.material:[part.material]){
-     if(mat?.emissive)bladeMaterials.add(mat);
-    }
-   });
-  }
-  const remaining=attackWarningRemaining(e);
-  for(const mat of bladeMaterials){
-   if(warning!==previousWarning){
-    mat.emissive.set(warning?'#c32d24':'#345c86');
-    mat.emissiveIntensity=warning?.95:.22;
-   }
-   setBladeWarningTiming(mat,remaining);
-  }
-  previousWarning=warning;
+  trail.update(model,'blade',1.70,samuraiStrikeActive(e));
  };
 }
 function scythemoth(root){
@@ -337,9 +320,10 @@ function cinderWarden(root){
  };
  const ringMesh=new THREE.Mesh(new THREE.RingGeometry(1.45,1.95,64),ringMaterial);
  ringMesh.name='boiler_fire_ring_ground';ringMesh.rotation.x=-Math.PI/2;ringMesh.position.y=.025;root.add(ringMesh);
- const warning=ring(root,'boiler_pressure_warning','#e0a151');warning.rotation.x=-Math.PI/2;warning.position.y=.03;
+ const warning=ring(root,'boiler_pressure_warning','#fff');warning.rotation.x=-Math.PI/2;warning.position.y=.03;
+ warning.material.toneMapped=false;
  return (e,time)=>{
-  const channel=e.state==='windup'&&e.move?.kind==='channel',preparing=channel&&e.elapsed<e.telegraph,shooting=channel&&e.elapsed>=e.telegraph;
+  const channel=e.state==='windup'&&e.move?.kind==='channel',shooting=channel&&e.elapsed>=e.telegraph;
   flow.visible=shooting&&e.health>0;flowMaterial.uniforms.clock.value=time;updateWaterClip(flowMaterial,e.waterZones);stream.update(shooting&&e.health>0,time,.9,e.waterZones);
   const auraActive=Boolean(e.activeAura)&&e.health>0;
   aura.update(auraActive,time,.8,e.waterZones);
@@ -349,12 +333,17 @@ function cinderWarden(root){
    ringUniforms.center.value.set(e.x,e.z);
    updateWaterClip(ringClip,e.waterZones);
   }
-  const cast=e.state==='windup'&&e.move?.kind==='aura';warning.visible=preparing||cast;
-  const uniforms=warning.material.uniforms;
-  uniforms.clock.value=time;
-  warning.material.opacity=.2;
-  uniforms.fade.value.set(.5,e.elapsed/Math.max(.01,e.telegraph),1);
-  uniforms.shape.value.x=cast?2.2:.95;
+  const cast=e.state==='windup'&&e.move?.kind==='aura';
+  const impactAt=e.hitAt??e.telegraph;
+  warning.visible=(channel||cast)&&attackWarningActive(e.elapsed,impactAt);
+  if(warning.visible){
+   const uniforms=warning.material.uniforms;
+   uniforms.tint.value.set(attackWarningColor(cast?e.move.aura.hit:e.move));
+   uniforms.clock.value=time;
+   warning.material.opacity=.2+.25*attackWarningPulse(e);
+   uniforms.fade.value.set(.5,clamp((e.elapsed-attackWarningStart(impactAt))/ATTACK_PREVIEW_LEAD),1);
+   uniforms.shape.value.x=cast?2.2:.95;
+  }
  };
 }
 const factories={cinderWarden,shellbug,lantern,stonekeeper,mirrorGuard,samurai,scythemoth,spitter};

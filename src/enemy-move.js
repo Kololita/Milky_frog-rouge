@@ -29,7 +29,7 @@ class UtilityMove extends EnemyMove{
  get lunge(){return 0;}
 }
 export class StanceMove extends UtilityMove{
- constructor(options){super({maxParryImpact:1,counterDelay:.12,recoil:0,feedbackDuration:.35,cooldown:3.5,...options});this.kind='parry';}
+ constructor(options){super({counterDelay:.12,recoil:0,feedbackDuration:.35,cooldown:3.5,...options});this.kind='parry';}
  get parryStart(){return this.prepare;}
  get parryEnd(){return this.prepare+this.swing;}
 }

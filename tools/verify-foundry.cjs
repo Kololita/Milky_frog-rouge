@@ -244,20 +244,6 @@ app.whenReady().then(async()=>{
      if(normalStart.light<=0||normalLate.width<=normalStart.width||normalLate.light>=normalStart.light||
         perfectLate.light<=0||perfectLate.width>=perfectStart.width||perfectLate.light>=perfectStart.light)
        throw Error('GPU shield pixels: '+JSON.stringify({normalStart,normalLate,perfectStart,perfectLate}));
-     const {setBladeWarningTiming}=await import('/src/attack-warning.js');
-     const bladeMaterial=new T.MeshStandardMaterial({color:0,emissive:0x802010,emissiveIntensity:.5});
-     const bladeProbe=new T.Mesh(new T.PlaneGeometry(1,1),bladeMaterial);
-     bladeProbe.position.y=1;scene.add(bladeProbe);
-     const bladeBrightness=remaining=>{
-       setBladeWarningTiming(bladeMaterial,remaining);
-       renderer.render(scene,camera);
-       const pixel=new Uint8Array(4);
-       renderer.readRenderTargetPixels(target,64,64,1,1,pixel);
-       return pixel[0];
-     };
-     const bladeIdle=bladeBrightness(.2),bladePeak=bladeBrightness(.075),bladeAfter=bladeBrightness(0);
-     bladeProbe.removeFromParent();bladeProbe.geometry.dispose();bladeMaterial.dispose();
-     if(bladeIdle<=0||bladePeak<=bladeIdle||bladeAfter!==bladeIdle)throw Error('GPU blade pulse brightness: '+[bladeIdle,bladePeak,bladeAfter]);
      const trailEffects=createMonsterEffects('samurai');
      scene.add(trailEffects.root);
      const enemy={health:1,state:'windup',phase:1,elapsed:1,telegraph:.5};
@@ -422,7 +408,8 @@ app.whenReady().then(async()=>{
      camera.lookAt(0,0,0);
      battle.enemy.state='windup';
      battle.enemy.elapsed=.3;
-     battle.enemy.telegraph=.6;
+     battle.enemy.telegraph=1;
+     battle.enemy.hitAt=1;
      battle.enemy.move={...battle.enemyStats,reach:.8,halfAngle:Math.PI/4};
      const sectorPixels=()=>{
        enemyView.update(battle,camera,0);
@@ -443,7 +430,7 @@ app.whenReady().then(async()=>{
        for(let i=0;i<pixels.length;i+=4)red+=pixels[i];
        return red;
      };
-     const beforePulse=sectorBrightness(.44),peakPulse=sectorBrightness(.525),afterPulse=sectorBrightness(.6);
+     const beforePulse=sectorBrightness(.64),peakPulse=sectorBrightness(.725),afterPulse=sectorBrightness(.81);
      if(peakPulse<=Math.max(beforePulse,afterPulse))throw Error('GPU warning pulse did not peak before contact');
      enemyView.group.visible=false;
      const hitboxes=createHitboxView(scene);

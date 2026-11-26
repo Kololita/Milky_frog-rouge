@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#dce8e9" />
-    <title>奶蛙 · 0.3.1</title>
+    <title>奶蛙 · 0.3.2</title>
   </head>
   <body>
     <main id="app" class="on-home">
@@ -21,17 +21,30 @@
       <section id="home-screen" class="home-screen" aria-label="开始界面">
         <div class="home-content"><h1>奶蛙</h1>
           <nav class="home-menu" aria-label="主菜单">
-            <button id="home-new-game" class="home-primary" type="button" disabled>开始新游戏</button>
-            <button id="home-custom-game" type="button" aria-haspopup="dialog" disabled>自定义游戏</button>
+            <button id="home-continue-game" class="home-primary" type="button" hidden disabled>继续游戏</button>
+            <button id="home-new-game" class="home-primary" type="button" aria-haspopup="dialog" disabled>开始新游戏</button>
             <button id="home-practice" type="button" disabled>正在加载角色…</button>
             <button id="home-tutorial" type="button" disabled>新手教程</button>
             <button id="home-arena" type="button">竞技场 <small>Boss挑战</small></button>
             <button id="home-settings" type="button">设置</button>
           </nav>
-          <div class="home-version"><b>0.3.1</b></div>
+          <div class="home-version"><b>0.3.2</b></div>
         </div>
       </section>
-      <dialog id="custom-game-dialog" aria-labelledby="custom-game-title">
+      <dialog id="new-game-dialog" class="home-game-dialog" aria-labelledby="new-game-title">
+        <h2 id="new-game-title">开始新游戏</h2>
+        <div class="new-game-options">
+          <button id="home-random-game" type="button">开始一局新的游戏</button>
+          <button id="home-custom-game" type="button" aria-haspopup="dialog">自定义游戏</button>
+          <button id="new-game-cancel" type="button">返回</button>
+        </div>
+      </dialog>
+      <dialog id="discard-game-dialog" class="home-game-dialog" aria-labelledby="discard-game-title">
+        <h2 id="discard-game-title">放弃当前游戏</h2>
+        <p>放弃后，这局远征的存档将被清除。</p>
+        <div class="custom-game-actions"><button id="discard-game-cancel" type="button" autofocus>返回</button><button id="discard-game-confirm" type="button">确认放弃</button></div>
+      </dialog>
+      <dialog id="custom-game-dialog" class="home-game-dialog" aria-labelledby="custom-game-title">
         <h2 id="custom-game-title">自定义游戏</h2>
         <form id="custom-game-form" novalidate>
           <label for="custom-game-seed">地图种子</label>
@@ -39,19 +52,56 @@
           <p id="custom-game-error" role="alert" hidden>请输入恰好 9 位数字。</p>
           <div class="custom-game-actions">
             <button id="custom-game-cancel" type="button">返回</button>
-            <button type="submit">生成地图</button>
+            <button type="submit">选择职业</button>
           </div>
         </form>
       </dialog>
+      <section id="run-class-screen" class="run-start-screen" aria-labelledby="run-class-title" hidden>
+        <header class="run-start-heading">
+          <button id="run-class-back" type="button">返回</button>
+          <h2 id="run-class-title">选择职业</h2>
+        </header>
+        <div id="run-class-roster" class="run-class-roster" aria-label="可选职业"></div>
+        <footer class="run-class-footer">
+          <input id="run-class-scroll" type="range" min="0" max="0" value="0" aria-label="横向滚动职业列表" disabled />
+          <button id="run-class-next" class="run-start-primary" type="button" disabled>下一步</button>
+        </footer>
+      </section>
+      <section id="run-boon-screen" class="run-start-screen" aria-labelledby="run-boon-title" hidden>
+        <header class="run-start-heading">
+          <button id="run-boon-back" type="button">返回职业</button>
+          <h2 id="run-boon-title">选择开局增益</h2>
+        </header>
+        <div id="run-boon-options" class="run-boon-options" aria-label="可选增益"></div>
+        <footer class="run-boon-footer">
+          <button id="run-boon-confirm" class="run-start-primary" type="button" disabled>开始远征</button>
+        </footer>
+      </section>
       <dialog id="tutorial-directory" aria-labelledby="tutorial-directory-title"><div class="settings-heading"><h2 id="tutorial-directory-title">新手教程</h2><button id="tutorial-directory-close" type="button">返回</button></div><nav aria-label="教程分类"><button id="tutorial-basics" type="button">基础操作与机制</button><button id="tutorial-equipment" type="button">装备与装配</button><button id="tutorial-moves" type="button">招式大全</button></nav></dialog>
       <aside id="tutorial-panel" hidden aria-live="polite"><h2></h2><p></p><progress max="11" value="0"></progress><small>N 跳过此步 · Esc 返回主菜单</small></aside>
-      <section id="run-screen" class="run-screen" hidden aria-label="远征地图">
-        <header class="run-header"><h1>远征地图</h1><span id="run-floor"></span><button id="run-exit" type="button">返回主菜单</button></header>
+      <header id="run-toolbar" class="run-toolbar" aria-label="远征状态" hidden>
+        <div class="run-toolbar-stats"><span id="run-floor"></span><span id="run-gold"></span></div>
+        <nav class="run-toolbar-actions" aria-label="远征操作">
+          <button id="run-view-map" type="button">查看地图</button>
+          <button id="run-view-inventory" type="button" aria-haspopup="dialog">查看背包</button>
+          <button id="run-open-settings" type="button" aria-haspopup="dialog">设置</button>
+        </nav>
+        <output id="run-seed" aria-label="地图种子"></output>
+      </header>
+      <section id="run-screen" class="run-screen" hidden aria-label="地图">
+        <div id="run-plans" class="run-plans" hidden></div>
         <div id="run-map-scroll"><div id="run-map-canvas"></div></div>
       </section>
       <dialog id="run-result"><h2 id="run-result-title"></h2><button id="run-result-next" type="button">下一层</button></dialog>
-      <dialog id="loot-dialog" aria-labelledby="loot-title"><div class="loot-heading"><button id="loot-inventory" type="button">背包</button><h2 id="loot-title">选择战利品</h2></div><div id="loot-choices"></div><button id="loot-confirm" type="button" disabled>确认</button></dialog>
-      <section id="rest-screen" class="rest-screen" hidden aria-label="休息处"><header><h1>休息处</h1><div id="rest-options"></div><span id="rest-potions"></span></header><button id="rest-leave" type="button">继续前进</button></section>
+      <dialog id="loot-dialog" class="run-room-dialog" aria-labelledby="loot-title">
+        <div class="run-room-scroll">
+          <div class="loot-panel"><h2 id="loot-title">选择战利品</h2><div id="loot-choices"></div><button id="loot-confirm" type="button" disabled>确认</button></div>
+        </div>
+      </dialog>
+      <section id="rest-screen" class="rest-screen" hidden aria-label="休息处">
+        <header><h1>休息处</h1><div id="rest-options"></div><span id="rest-potions"></span></header>
+        <button id="rest-leave" type="button">继续前进</button>
+      </section>
       <section id="battle-hud" class="battle-hud" aria-label="战斗状态">
         <div id="buff-status" class="buff-status" role="list" aria-label="增益效果" hidden></div>
         <div class="meter-row detail-only"><span>生命</span><strong id="health-value"></strong></div>
@@ -65,7 +115,6 @@
       </section>
       <div id="battle-feed" class="battle-feed" aria-live="polite"></div>
       <div id="combo-damage" class="combo-damage" aria-label="本次连击累计伤害" hidden></div>
-      <output id="run-seed" aria-label="地图种子" hidden></output>
       <button id="settings-open" class="settings-open" type="button" aria-haspopup="dialog" aria-label="设置" title="设置 · Esc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l.6 2.4 2 .9 2.2-.7 3 5.2-1.7 1.8v2.1l1.7 1.8-3 5.2-2.2-.7-2 .9L15 24H9l-.6-2.4-2-.9-2.2.7-3-5.2L2.9 14v-2.1L1.2 10l3-5.2 2.2.7 2-.9z" transform="translate(1 -1) scale(.9)"/><circle cx="12" cy="11" r="3.2"/></svg></button>
       <dialog id="boss-arena-dialog" aria-labelledby="arena-title"><div class="settings-heading"><h2 id="arena-title">竞技场</h2><button id="arena-close" type="button" aria-label="关闭竞技场列表">返回</button></div><button id="home-samurai" type="button" disabled>武士 <small>困难 · 快慢刀</small></button><div id="arena-encounters"></div></dialog>
       <dialog id="settings-dialog" aria-labelledby="settings-title">
@@ -106,7 +155,7 @@
             </section>
           </fieldset>
         </form>
-        <div class="settings-bottom"><span>设置自动保存在本机 · v0.3.1</span><button id="return-home" type="button">返回主菜单</button><button id="settings-reset" type="button">恢复默认</button></div>
+        <div class="settings-bottom"><span>设置自动保存在本机 · v0.3.2</span><button id="return-home" type="button">保存并退出</button><button id="settings-reset" type="button">恢复默认</button></div>
       </dialog>
       <section id="boss-hud" class="boss-hud" hidden aria-label="Boss战斗状态"><span id="boss-name"></span><div class="boss-health"><i id="boss-health-fill"></i></div></section>
       <img id="skill-activation-icon" class="skill-activation-icon" alt="" hidden>

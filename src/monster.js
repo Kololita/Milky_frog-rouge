@@ -53,7 +53,8 @@ export class Mob extends Monster{
  onDamaged(battle,source){reactToPressure(battle,this,source);}
  reactToPlayerAttack(battle,pose){
   if(this.state!=='windup'||this.move?.kind!=='parry'||!battle.attack)return false;
-  return battle.tryEnemyParry(this,pose,battle.currentAttackStats);
+  const attack=battle.currentAttackStats;
+  return battle.attack.consumed.size<attack.times.length&&battle.tryEnemyParry(this,pose,attack);
  }
  act(battle,dt,pose){
   if(this.reactToPlayerAttack(battle,pose))return;

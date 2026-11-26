@@ -1,5 +1,6 @@
 import {AttackMove} from './enemy-move.js';
 import {steerEnemy} from './enemy-steering.js';
+import {ATTACK_PREVIEW_LEAD} from './attack-warning.js';
 
 function followPlayer(enemy,pose,dt,stats){
   const dx=pose.x-enemy.x,dz=pose.z-enemy.z,distance=Math.hypot(dx,dz);
@@ -20,9 +21,10 @@ export function updateTrainingDummy(battle,dt,pose){
   if(e.state==='windup'){
     const trackingDt=Math.max(0,Math.min(dt,.2-(e.elapsed-dt)));
     if(trackingDt>0)steerEnemy(e,pose,trackingDt,e.windupTurnRate);else e.turnVelocity=0;
-    if(e.elapsed>=stats.windup-1e-9){
-      battle.strikePlayer(pose,e.move,Math.max(0,(e.elapsed-stats.windup)/(battle.worldTimeScale||1)));
-      if(e.state==='windup'){e.state='recover';e.elapsed=Math.max(0,e.elapsed-stats.windup);}
+    const hitAt=e.hitAt??stats.windup;
+    if(e.elapsed>=hitAt-1e-9){
+      battle.strikePlayer(pose,e.move,Math.max(0,(e.elapsed-hitAt)/(battle.worldTimeScale||1)));
+      if(e.state==='windup'){e.state='recover';e.elapsed=Math.max(0,e.elapsed-hitAt);}
     }
     return;
   }
@@ -40,5 +42,6 @@ export function updateTrainingDummy(battle,dt,pose){
   const engageDistance=stats.stopDistance+stats.approachTolerance;
   if(followPlayer(e,pose,dt,stats)>engageDistance+1e-9){e.state='chase';return;}
   const {motionMultiplier,poseDamage,reach,halfAngle,heightMin,heightMax,startupResilience,impactLevel}=stats;
-  e.move=new AttackMove({label:'出拳',prepare:stats.windup,swing:0,motion:'jab',motionMultiplier,poseDamage,reach,halfAngle,heightMin,heightMax,startupResilience,impactLevel});e.telegraph=stats.windup;e.swingDuration=0;e.state='windup';e.elapsed=carry;e.moving=false;
+  e.hitAt=e.telegraph=Math.max(stats.windup,ATTACK_PREVIEW_LEAD+carry);
+  e.move=new AttackMove({label:'出拳',prepare:e.telegraph,swing:0,motion:'jab',motionMultiplier,poseDamage,reach,halfAngle,heightMin,heightMax,startupResilience,impactLevel});e.swingDuration=0;e.state='windup';e.elapsed=carry;e.moving=false;
 }

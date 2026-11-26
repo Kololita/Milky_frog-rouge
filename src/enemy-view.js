@@ -1,10 +1,9 @@
 import {skipActorShadows} from './actor-shadows.js';
 import {createGpuHealthBar} from './gpu-health-bar.js';
-import {attackWarningRemaining,setBladeWarningTiming,warningPulseGLSL} from './attack-warning.js';
+import {attackWarningActive,attackWarningColor,attackWarningStart,recoveryStrikeTime,warningPulseGLSL} from './attack-warning.js';
 import * as THREE from 'three';
 import {createImpactParticles} from './gpu-particles.js';
 import {bossAnimationPose} from './boss-animation.js';
-import {bossBladeWarning} from './samurai.js';
 import {createMonsterVisuals} from './monster-visuals.js';
 import {createBossGrip} from './boss-grip.js';
 import {isDamagingMove} from './enemy-move.js';
@@ -13,11 +12,11 @@ export {createWaveView} from './wave-view.js';
 export {createEnemyProjectileView} from './enemy-projectile-view.js';
 
 /** A small training automaton made entirely from shared primitive geometry. */
-function attackSector(color,opacity){
+function attackSector(){
   const sector={value:new THREE.Vector2()};
   const timing={value:new THREE.Vector3(0,1,-1)};
   const profile={value:new THREE.Vector3(.15,.30,0)};
-  const material=new THREE.MeshBasicMaterial({color,opacity,transparent:true,side:THREE.DoubleSide,depthWrite:false});
+  const material=new THREE.MeshBasicMaterial({transparent:true,side:THREE.DoubleSide,depthWrite:false,toneMapped:false});
   material.onBeforeCompile=shader=>{
     shader.uniforms.sector=sector;
     shader.uniforms.warningTiming=timing;
@@ -40,10 +39,11 @@ function attackSector(color,opacity){
   };
   const mesh=new THREE.Mesh(new THREE.CircleGeometry(1,48),material);
   mesh.frustumCulled=false;
-  return {mesh,set(move,enemy,duration,boss=false){
+  return {mesh,set(move,enemy,impactAt,{boss=false}={}){
+    const start=attackWarningStart(impactAt),duration=impactAt-start;
+    material.color.set(attackWarningColor(move));
     sector.value.set(move.reach,move.halfAngle);
-    const cue=enemy.move?.contactPhase!=null?enemy.hitAt:enemy.telegraph;
-    timing.value.set(enemy.elapsed,Math.max(.001,duration),cue??-1e6);
+    timing.value.set(Math.max(0,enemy.elapsed-start),Math.max(.001,duration),duration);
     profile.value.set(boss ? .10 : .15,boss ? .28 : .30,boss&&enemy.elapsed>=enemy.telegraph ? .18 : 0);
   }};
 }
@@ -77,8 +77,8 @@ export function createEnemyView(scene) {
     mesh(new THREE.SphereGeometry(.12,12,8),shell,elbow,[0,-.26,0]);
     arms.push({shoulder,elbow});
   }
-  const basicSector=attackSector('#ec704d',.25),warning=basicSector.mesh;
-  warning.position.y=.016;group.add(warning);
+  const basicSector=attackSector(),warning=basicSector.mesh;
+  warning.name='enemy_attack_warning';warning.position.y=.016;group.add(warning);
   const healthBar=createGpuHealthBar({width:.90,height:.10,fillWidth:.84,fillHeight:.055,background:'#37434a',color:'#e89174'});
   const health=healthBar.group;
   health.position.y=1.76;
@@ -118,8 +118,8 @@ export function createEnemyView(scene) {
   mesh(new THREE.CylinderGeometry(.04,.04,.28,10),dark,sword,[0,.55,0]);
   const supportGrip=createBossGrip(arms[1].shoulder,arms[1].elbow,sword);
   function goldMaterial(){return new THREE.MeshStandardMaterial({color:'#c6a36a',metalness:.7,roughness:.4});}
-  const bossSector=attackSector('#e6a556',.22),bossWarning=bossSector.mesh;
-  bossWarning.position.y=.027;group.add(bossWarning);
+  const bossSector=attackSector(),bossWarning=bossSector.mesh;
+  bossWarning.name='boss_attack_warning';bossWarning.position.y=.027;group.add(bossWarning);
   const empowered=new THREE.Mesh(new THREE.TorusGeometry(.55,.022,6,40),new THREE.MeshBasicMaterial({color:'#ffcd57',transparent:true,opacity:.75,depthWrite:false}));
   empowered.rotation.x=-Math.PI/2;empowered.position.y=.08;group.add(empowered);
   const monsterVisuals=createMonsterVisuals(group);
@@ -129,7 +129,6 @@ export function createEnemyView(scene) {
       const twoHanded=bossHeavyActive(e);
       const gripWeight=twoHanded?Math.max(0,Math.min(1,e.state==='windup'?e.elapsed/Math.max(.001,e.telegraph*.16):1-Math.max(0,(e.elapsed/e.recovery-.7)/.3))):0;
       sword.position.y-=.2*gripWeight;
-      const red=bossBladeWarning(e);bladeMaterial.color.set(red?'#ff3939':'#529fff');bladeMaterial.emissive.set(red?'#ff1010':'#1684ff');bladeMaterial.emissiveIntensity=red?2:.45;setBladeWarningTiming(bladeMaterial,attackWarningRemaining(e));
       bossArmor.visible=boss||battle.encounter.kind==='elite';sword.visible=boss;body.scale.setScalar(boss?1.35:1);
       const moving=e.state==='chase'||e.state==='circle'||(!boss&&e.state==='recover'&&e.moving),wind=e.state==='windup'?Math.min(1,e.elapsed/(e.telegraph??battle.enemyStats.windup)):0;
       const swing=e.state==='recover'?Math.max(0,1-e.elapsed/.3):0;
@@ -202,15 +201,23 @@ export function createEnemyView(scene) {
       body.visible=!monsterVisuals.update(battle);
       if(body.visible)updateFallbackPose(battle,e,boss,dead);
       else plantedAnchor=null;
-      bossWarning.visible=boss&&e.state==='windup'&&!e.hitResolved;
+      const fallbackLightning=body.visible&&e.state==='transition'&&!e.transitionHit;
+      const bossContact=fallbackLightning?e.transitionStrikeAt:e.hitAt??e.windup;
+      bossWarning.visible=boss&&(e.state==='windup'&&!e.hitResolved||fallbackLightning)&&
+        attackWarningActive(e.elapsed,bossContact);
       if(bossWarning.visible){
-        bossSector.set(e.move,e,e.hitAt??e.windup,true);
-        bossWarning.material.color.set(e.move.windup<.8?'#a6e6f1':'#f39b4a');
+        bossSector.set(e.move,e,bossContact,{boss:true});
       }
-      const attack=e.move??battle.enemyStats;
-      const canWarn=isDamagingMove(attack)&&!attack.projectile&&Number.isFinite(attack.reach)&&Number.isFinite(attack.halfAngle);
-      if(canWarn)basicSector.set(attack,e,e.telegraph??battle.enemyStats.windup);
-      warning.visible=!boss&&e.state==='windup'&&canWarn;
+      const release=e.move?.recoveryStrike;
+      const previewExtraction=e.state==='recover'&&release&&!e.recoveryStrikeResolved;
+      const attack=previewExtraction?release.attack:e.move??battle.enemyStats;
+      const canWarn=isDamagingMove(attack)&&!attack.skipWarning&&Number.isFinite(attack.reach)&&Number.isFinite(attack.halfAngle);
+      const contact=previewExtraction?recoveryStrikeTime(release):e.hitAt??e.telegraph??battle.enemyStats.windup;
+      warning.visible=!boss&&canWarn&&(previewExtraction||e.state==='windup')&&attackWarningActive(e.elapsed,contact);
+      if(warning.visible){
+        warning.position.set(previewExtraction?release.side??0:0,.016,previewExtraction?release.forward??0:0);
+        basicSector.set(attack,e,contact);
+      }
       health.visible=!dead;
       healthBar.setFraction(e.health/e.maxHealth);
       dazeStars.visible=e.state==='dazed'&&!dead;

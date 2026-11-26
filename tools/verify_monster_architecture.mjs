@@ -39,9 +39,11 @@ try{
  for(const fps of [30,60,144])for(const incoming of ['Attack1','Attack4']){
   const b=new Battle();b.reset(identity);const e=b.enemy;e.x=0;e.z=1.9;e.heading=Math.PI;
   const pose={x:0,z:0,height:0,heading:0};b.beginAttack(incoming);b.update(1/fps,pose);
-  const parry=b.takeEvents().find(event=>event.type==='enemyParry');assert.equal(Boolean(parry),incoming==='Attack1');
-  if(incoming==='Attack1'){assert(!b.attack,'Nearby light attack was not intercepted before hit time');assert.equal(e.counterPending,2);assert.equal(b.player.health,100);}
-  else{assert(b.attack);assert.equal(e.move.startupResilience,2);b.impactEnemy(2,pose);assert.equal(e.state,'windup');b.impactEnemy(3,pose);assert.notEqual(e.state,'windup');}
+  assert.equal(e.move.startupResilience,2);
+  assert(!b.takeEvents().some(event=>event.type==='enemyParry'),'Cannot parry while the window is arming');
+  while(e.elapsed<.5&&e.state==='windup')b.update(1/fps,pose);
+  assert(b.takeEvents().some(event=>event.type==='enemyParry'));
+  assert(!b.attack);assert.equal(e.counterPending,2);assert.equal(b.player.health,100);
  }
  // Same class lifecycle handles knockdown and wake-up for every configured mob.
  const b=new Battle();b.reset(identity);b.enemy.state='down';b.enemy.downUntil=.02;b.enemy.riseUntil=.04;b.enemy.riseDuration=.02;
@@ -50,7 +52,7 @@ try{
 
 for(const fps of [30,60,144]){
  const g=await gameFixture(fps);g.freezeEnemy=true;
- g.read('battle.reset("mirrorGuard");battle.enemy.x=0;battle.enemy.z=1.9;battle.enemy.heading=Math.PI;battle.enemy.state="windup";battle.enemy.move=battle.enemy.stats.moves[1];battle.enemy.elapsed=0;battle.enemy.telegraph=0;battle.enemy.swingDuration=.6;battle.enemy.windup=.6');
+ g.read('battle.reset("mirrorGuard");battle.enemy.x=0;battle.enemy.z=1.9;battle.enemy.heading=Math.PI;battle.enemy.state="windup";battle.enemy.move=battle.enemy.stats.moves[1];battle.enemy.elapsed=.5;battle.enemy.telegraph=.5;battle.enemy.swingDuration=1.2;battle.enemy.windup=1.7');
  // Freeze would force hurt, so this check runs a real controller frame with AI enabled.
  g.freezeEnemy=false;g.mouse(0);g.tickFrames(1);assert.equal(g.read('activeGesture?.name'),'Hit');assert.equal(g.read('battle.player.health'),100);
 }

@@ -36,10 +36,17 @@ export function createRestSite(scene,doc,{equipment=()=>null}={}){
  }
  const glow=new THREE.PointLight('#ffd3a0',1.8,5,2);glow.position.set(1.6,.5,.1);group.add(glow);
  const screen=doc.getElementById?.('rest-screen'),options=doc.getElementById?.('rest-options'),count=doc.getElementById?.('rest-potions');
- let opened=false,battle,leave;
+ let opened=false,battle,leave,order,potionBonus,refill,completed,onProgress;
  const upgradeDialog=doc.getElementById?.('assembly-upgrade-dialog'),upgradeList=doc.getElementById?.('assembly-upgrade-list');
  const finish=()=>{const callback=leave;api.close();callback?.();};
- const workshop=createHingeWorkshop(doc,{equipment,finish});
+ const workshop=createHingeWorkshop(doc,{equipment,finish:()=>complete('equipment')});
+ function complete(action){
+  if(order!=='forge'){finish();return;}
+  completed.add(action);
+  renderOptions();
+  if(!options||[...options.children].every(button=>button.disabled))finish();
+  else onProgress([...completed]);
+ }
  function chooseUpgrade(){
   const menu=equipment();if(!menu||!upgradeDialog||!upgradeList)return;
   upgradeList.replaceChildren();for(const choice of menu.upgradeChoices()){
@@ -47,20 +54,37 @@ export function createRestSite(scene,doc,{equipment=()=>null}={}){
    const name=doc.createElement('strong');name.textContent=button.disabled?`${choice.name}（满级）`:`${choice.name} → ${choice.item.name}+${choice.level+1}`;
    const preview=doc.createElement('span');preview.className='upgrade-board-preview';const masks=ASSEMBLY_BOARDS.get(choice.item.id).levels,current=masks[choice.level],next=masks[Math.min(choice.level+1,choice.maxLevel)];preview.style.gridTemplateColumns=`repeat(${next[0].length},18px)`;
    for(let y=0;y<next.length;y++)for(let x=0;x<next[0].length;x++){const cell=doc.createElement('i');cell.className=next[y][x]==='#'?(current[y][x]==='#'?'is-open':'is-new'):'is-closed';preview.append(cell);}
-   button.append(name,preview);button.addEventListener('click',()=>{if(opened&&!button.disabled&&menu.upgrade(choice.item.id))finish();});upgradeList.append(button);
+   button.append(name,preview);button.addEventListener('click',()=>{if(opened&&!button.disabled&&menu.upgrade(choice.item.id)){upgradeDialog.close();complete('upgrade');}});upgradeList.append(button);
   }upgradeDialog.showModal();
  }
  doc.getElementById?.('assembly-upgrade-close')?.addEventListener('click',()=>upgradeDialog.close());
  upgradeDialog?.addEventListener('keydown',event=>event.stopPropagation?.());
  const updateCount=()=>{if(count)count.textContent=`血瓶 ${battle.player.potions} / ${battle.potionCapacity}`;};
- const api={group,seat,get opened(){return opened;},open(current,onLeave){
-  battle=current;leave=onLeave;opened=true;group.visible=true;if(screen)screen.hidden=false;
-  options?.replaceChildren();for(const action of REST_ACTIONS){
-   if(!options)continue;const button=doc.createElement('button');button.type='button';button.textContent=action.label;if(action.id==='equipment')button.disabled=!workshop.canOpen('upgrade');
-   button.addEventListener('click',()=>{if(!opened||button.disabled)return;if(action.id==='upgrade'){chooseUpgrade();return;}if(action.id==='equipment'){workshop.open();return;}battle.refillPotions();button.disabled=true;updateCount();finish();});options.append(button);
+ function renderOptions(){
+  if(!options)return;
+  options.replaceChildren();
+  for(const action of REST_ACTIONS){
+   if((order==='forge'&&action.id==='restock')||(order==='restock'&&action.id!=='restock'))continue;
+   const button=doc.createElement('button');button.type='button';button.textContent=action.label;
+   if(action.id==='restock'&&refill)button.textContent='休息（补满血瓶）';
+   else if(action.id==='restock'&&potionBonus)button.textContent=`休息（补 ${Math.max(0,POTION_STATS.restGain+potionBonus)} 瓶）`;
+   if(action.id==='equipment')button.disabled=!workshop.canOpen('upgrade');
+   if(order==='forge'&&action.id==='upgrade')button.disabled=!equipment()?.upgradeChoices().some(choice=>choice.level<choice.maxLevel);
+   if(completed.has(action.id)){button.disabled=true;button.textContent+='（已完成）';}
+   button.addEventListener('click',()=>{
+    if(!opened||button.disabled)return;
+    if(action.id==='upgrade'){chooseUpgrade();return;}
+    if(action.id==='equipment'){workshop.open();return;}
+    battle.refillPotions(refill?battle.potionCapacity-battle.player.potions:POTION_STATS.restGain+potionBonus);updateCount();complete('restock');
+   });
+   options.append(button);
   }
-  updateCount();
- },close(){workshop.close();upgradeDialog?.close();opened=false;group.visible=false;if(screen)screen.hidden=true;leave=null;},update(camera,time){
+ }
+ const api={group,seat,get opened(){return opened;},open(current,onLeave,{order:nextOrder,refill:fullRefill=false,potionBonus:bonus=0,actions=[],saveProgress=()=>{}}={}){
+  battle=current;leave=onLeave;order=nextOrder;refill=fullRefill;potionBonus=bonus;completed=new Set(actions);onProgress=saveProgress;
+  opened=true;group.visible=true;if(screen)screen.hidden=false;
+  renderOptions();updateCount();
+ },refresh(){if(opened){renderOptions();updateCount();}},close(){workshop.close();upgradeDialog?.close();opened=false;group.visible=false;if(screen)screen.hidden=true;leave=null;},update(camera,time){
   camera.position.set(2.5,1.9,4.3);camera.lookAt(0,.9,0);camera.updateMatrixWorld(true);glow.intensity=1.8+Math.sin(time*4)*.12;emberClock.value=time;
  }};
  doc.getElementById?.('rest-leave')?.addEventListener('click',finish);return api;

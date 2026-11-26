@@ -73,7 +73,8 @@ function buildMirrorGuard(){
   const w=1-recover,parry=e.move?.kind==='parry',throwing=e.move?.motion==='shield-throw';
   const success=time<(e.parryGlowUntil??-Infinity),feedback=success?smooth((time-(e.parryFeedbackStart??time))/Math.max(.01,e.parryFeedbackDuration??.35)):0;
   const push=success?Math.sin(Math.PI*feedback):0;
-  shieldArm.rotation.set(THREE.MathUtils.lerp((-1.0*prep+(throwing?-1.1:0)*strike)*w,-1.15,push),0,-.1);
+  const raised=parry&&e.state==='windup'?1:prep;
+  shieldArm.rotation.set(THREE.MathUtils.lerp((-raised+(throwing?-1.1:0)*strike)*w,-1.15,push),0,-.1);
   shield.position.set(.14,-.20-.14*push,.22);
   bladeArm.rotation.set((-1.5*prep+2.1*strike)*w,e.move?.motion==='riposte'?(-.8*prep+1.6*strike)*w:0,.1);
   root.rotation.y=e.move?.motion==='riposte'?(-.25*prep+.65*strike)*w:0;
