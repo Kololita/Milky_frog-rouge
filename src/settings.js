@@ -57,7 +57,8 @@ export function createSettings(doc,win,{apply=()=>{},onOpen=()=>{},onClose=()=>{
     values.bindings[capture]=code;capture=null;sync();save();message.textContent='键位已保存';
   }
   win.addEventListener('keydown',event=>{
-    const modal=doc.querySelector?.('dialog[open]');if(modal?.open&&modal!==panel)return;
+    const modal=event.target?.closest?.('dialog[open]')??doc.querySelector?.('dialog[open]');
+    if(modal?.open&&modal!==panel)return;
     if(capture)return rebind(event.code,event);
     if(event.code==='Escape'){
       event.preventDefault();event.stopImmediatePropagation();
@@ -71,6 +72,13 @@ export function createSettings(doc,win,{apply=()=>{},onOpen=()=>{},onClose=()=>{
   doc.getElementById('settings-close').addEventListener('click',api.close);
   form.addEventListener('change',event=>{const field=event.target.dataset.setting;if(!field)return;values[field]=event.target.type==='checkbox'?event.target.checked:event.target.type==='range'?Number(event.target.value):event.target.value;save();});
   doc.getElementById('settings-reset').addEventListener('click',()=>{values={...DEFAULT_SETTINGS,bindings:{...DEFAULT_BINDINGS}};capture=null;sync();save();message.textContent='已恢复默认设置';});
-  doc.getElementById('settings-fullscreen').addEventListener('click',async()=>{try{if(doc.fullscreenElement)await doc.exitFullscreen();else await doc.documentElement.requestFullscreen();}catch{message.textContent='当前浏览器不支持全屏';}});
+  doc.getElementById('settings-fullscreen').addEventListener('click',async()=>{
+    try{
+      if(win.naiwaWindow){
+        if(!await win.naiwaWindow.toggleFullscreen())throw new Error('Desktop fullscreen unavailable');
+      }else if(doc.fullscreenElement)await doc.exitFullscreen();
+      else await doc.documentElement.requestFullscreen();
+    }catch{message.textContent='无法切换全屏';}
+  });
   sync();apply(values);return api;
 }

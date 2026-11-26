@@ -142,8 +142,8 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .run-start-screen :is(button,input):focus-visible{outline:2px solid #ffde92;outline-offset:4px;}
 #run-class-screen{
  grid-template-rows:auto minmax(270px,1fr) auto;
- background:#0c1817 linear-gradient(#07161644,#07161620 52%,#071616db 100%);
- background-image:linear-gradient(#07161665,#07161615 52%,#071616e8 100%),url('/images/run-start/class-pavilion.jpg');
+ background-color:#232c36;
+ background-image:linear-gradient(#13192242,transparent 43%,#111722ad),url('/images/run-start/class-studio.jpg');
  background-size:cover;background-position:center;
 }
 .run-class-roster{
@@ -365,8 +365,6 @@ button.loot-choice{cursor:pointer;}button.loot-choice:hover{box-shadow:0 0 0 3px
 body.combat-pointer-locked,body.combat-pointer-locked *{cursor:none!important;}
 .assembly-tile{position:relative;overflow:hidden;}.assembly-tile img{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);max-width:none;display:block;}
 
-html body.combat-cursor-hidden,html body.combat-cursor-hidden *{cursor:none!important;}
-
 .battle-meter.health{background:linear-gradient(to right,transparent 0 var(--fill),#9babb4 var(--fill) var(--shield-end,var(--fill)),transparent var(--shield-end,var(--fill))),#241e25;}
 
 .equipment-effect-line{display:block;line-height:1.65;}.equipment-term{color:#b52e38;font-weight:600;text-decoration:underline dotted;text-underline-offset:3px;}
@@ -440,6 +438,10 @@ html body.assembly-cursor-active,html body.assembly-cursor-active *{cursor:none!
 .run-shop-offer-actions .equipment-shape-preview{margin:0;}
 .run-shop-offer-actions button{margin-inline-start:auto;}
 .shop-skill,.shop-services{grid-column:span 3;}
+.shop-skill-effects{grid-column:1 / -1;padding:5px 7px;color:#463b25;background:#efe7d3;border-radius:4px;}
+.shop-skill-effects summary{font-size:12px;font-weight:700;}
+.shop-skill-effects summary:focus-visible{outline:2px solid #80652d;outline-offset:2px;}
+.shop-skill-effects .equipment-effect-line{overflow-wrap:anywhere;}
 .shop-service-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;}
 .shop-service{position:relative;min-width:0;}
 .shop-service .shop-service-action{display:grid;width:100%;justify-items:center;gap:2px;padding:5px 8px;background:#faf7ec;}

@@ -35,6 +35,11 @@ async function main(){
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
   const origin=`http://127.0.0.1:${server.address().port}`;
   const win=new BrowserWindow({width:1280,height:800,minWidth:800,minHeight:600,title:`奶蛙 · ${app.getVersion()}`,backgroundColor:'#173a32',show:false,autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  ipcMain.handle('desktop-toggle-fullscreen',event=>{
+    if(event.sender!==win.webContents||event.senderFrame?.url!==origin+'/')return false;
+    win.setFullScreen(!win.isFullScreen());
+    return true;
+  });
   // Only the packaged game's local page may capture the mouse.
   win.webContents.session.setPermissionRequestHandler((contents,permission,callback)=>{callback(contents===win.webContents&&permission==='pointerLock'&&contents.getURL().startsWith(origin+'/'));});
   win.webContents.session.setPermissionCheckHandler((contents,permission,requestingOrigin)=>contents===win.webContents&&permission==='pointerLock'&&requestingOrigin===origin);

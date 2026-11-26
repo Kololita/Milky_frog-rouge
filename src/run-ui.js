@@ -18,7 +18,7 @@ const SHOP_SERVICES=[
   diagram:'<path d="M10 6h24v24H10zM22 6v24M10 18h24M66 6h12v12h12v12H66zM66 18h12v12"/><rect class="service-removed" x="22" y="6" width="12" height="12"/><path class="service-mark" d="m24 8 8 8m0-8-8 8"/>',
  },
 ];
-const MAP_PREVIEW_STATES=new Set(['event','rest','shop','reward']);
+const MAP_PREVIEW_STATES=new Set(['event','rest','shop','reward','startingReward']);
 export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=>{},onMap=()=>{},prepare=()=>{},startBattle=()=>{},enterRest=()=>{},award=()=>{},openInventory=()=>{},openSettings=()=>{},openArtisan=()=>false,shopWorkshop,onExit=()=>{},saveStore,getAssembly=()=>({}),onSaveError=()=>{}}={}){
  const screen=doc.getElementById?.('run-screen');if(!screen)return null;
  const canvas=doc.getElementById('run-map-canvas'),scroll=doc.getElementById('run-map-scroll'),result=doc.getElementById('run-result');let run=null;
@@ -91,13 +91,20 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
     image.src=equipmentIconUrl(item.icon);image.alt='';
     name.textContent=item.name;grade.textContent=RARITIES[item.rarity].label;
     renderEquipmentText(doc,description,equipmentDescription(item));
-    details.append(name,grade,description);
+    details.append(name,grade);
+    row.append(image,details);
+    if(slot==='skill'){
+     const effects=doc.createElement('details'),label=doc.createElement('summary');
+     effects.className='shop-skill-effects';effects.open=true;
+     label.textContent='技能效果';
+     effects.append(label,description);row.append(effects);
+    }else details.append(description);
     actions.className='run-shop-offer-actions';
     buy.type='button';const sold=run.inventory.includes(item.id);
     buy.textContent=sold?'已购买':`购买 · ${price} 金币`;buy.disabled=sold||price>run.gold;
     buy.addEventListener('click',()=>{if(run.buy(item.id)){award(item,roll);showShop();}});
     actions.append(equipmentShape(doc,item),buy);
-    row.append(image,details,actions);shelf.append(row);
+    row.append(actions);shelf.append(row);
    }
   }
   const services=doc.createElement('section');services.className='run-shop-shelf shop-services';
@@ -194,7 +201,7 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
    button.addEventListener('click',()=>{
     const leavingShop=run.status==='shop';
     if(!run.select(node.id))return;
-    if(leavingShop){closeMapPreview();shopWorkshop?.close();shop.close();mountToolbar(screen);}
+    if(leavingShop){closeMapPreview(false);shopWorkshop?.close();shop.close();mountToolbar(screen);}
     render();centerMap();enterNode(node);
    });canvas.append(button);
   }
@@ -236,11 +243,14 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
   floorLabel.textContent=`第 ${Math.min(run.map.rows.length,layer+1)} / ${run.map.rows.length} 层`;
   goldLabel.textContent=`${run.gold} 金币`;
   seedLabel.textContent=run.map.seed;
-  mapButton.textContent=mapPreview.open?(run.status==='reward'?'返回战利品':'返回房间'):'查看地图';
+  const choosingLoot=run.status==='reward'||run.status==='startingReward';
+  mapButton.textContent=mapPreview.open?(choosingLoot?'返回战利品':'返回房间'):'查看地图';
+  mapButton.setAttribute('aria-expanded',String(mapPreview.open));
   mapButton.disabled=!mapPreview.open&&run.status!=='map'&&!MAP_PREVIEW_STATES.has(run.status);
   inventoryButton.disabled=run.status==='battle';
  }
  function map({save=true}={}){
+  closeMapPreview(false);
   screen.hidden=false;mountToolbar(screen);onMap();render();centerMap();if(save)checkpoint();
  }
  function centerMap(){
@@ -255,6 +265,7 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
  let previewOrigin;
  function viewMap(){
   if(mapPreview.open){closeMapPreview();return;}
+  if(previewOrigin)closeMapPreview(false);
   if(run?.status==='map'){centerMap();return;}
   if(!MAP_PREVIEW_STATES.has(run?.status))return;
   previewOrigin={host:toolbar.parentElement,hidden:screen.hidden};
@@ -263,12 +274,15 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
   mapPreview.showModal();
   mountToolbar(screen);render();centerMap();mapButton.focus();
  }
- function closeMapPreview(){
-  if(!mapPreview.open)return;
+ function closeMapPreview(restoreFocus=true){
+  if(!previewOrigin)return;
   const {host,hidden}=previewOrigin;
+  previewOrigin=null;
+  if(mapPreview.open)mapPreview.close();
   screen.hidden=hidden;
-  mapPreview.before(screen);mapPreview.close();mountToolbar(host);
-  previewOrigin=null;mapButton.focus();
+  mapPreview.before(screen);
+  mountToolbar(host);
+  if(restoreFocus)mapButton.focus();
  }
  const api={jump({type,encounter,eventIndex}){
   api.abandon();practiceRun=true;run=new RunProgress();onNew(null,run);
@@ -291,8 +305,8 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
  },
  save:saveProgress,
  refreshEvent(){eventUI.refresh();},
- hide(){screen.hidden=true;},
- abandon(){closeMapPreview();eventUI.close();shopWorkshop?.close();shop.close();run=null;practiceRun=false;battleEntryPlayer=null;selectedReward=null;mountToolbar(toolbarHome);screen.hidden=true;result.close();loot?.close();},
+ hide(){closeMapPreview(false);screen.hidden=true;},
+ abandon(){closeMapPreview(false);eventUI.close();shopWorkshop?.close();shop.close();run=null;practiceRun=false;battleEntryPlayer=null;selectedReward=null;mountToolbar(toolbarHome);screen.hidden=true;result.close();loot?.close();},
  exit(){api.abandon();onExit();},
  tick(battle){
   if(run?.status!=='battle')return;
@@ -308,6 +322,7 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
  inventoryButton.addEventListener('click',openInventory);
  doc.getElementById('run-open-settings').addEventListener('click',openSettings);
  mapPreview.addEventListener('cancel',event=>{event.preventDefault();closeMapPreview();});
+ mapPreview.addEventListener('close',()=>{if(!mapPreview.open)closeMapPreview();});
  doc.getElementById('run-result-next').addEventListener('click',()=>{result.close();if(run?.advance())map();else api.exit();});
  result.addEventListener('cancel',event=>event.preventDefault());loot?.addEventListener('cancel',event=>event.preventDefault());return api;
 }

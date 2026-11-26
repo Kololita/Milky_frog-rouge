@@ -4,3 +4,6 @@ contextBridge.exposeInMainWorld('naiwaSettings',{
   getItem:key=>allowed.has(key)?ipcRenderer.sendSync('settings-read',key):null,
   setItem:(key,value)=>allowed.has(key)&&ipcRenderer.sendSync('settings-write',value,key),
 });
+contextBridge.exposeInMainWorld('naiwaWindow',{
+  toggleFullscreen:()=>ipcRenderer.invoke('desktop-toggle-fullscreen'),
+});

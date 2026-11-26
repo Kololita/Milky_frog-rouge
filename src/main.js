@@ -637,7 +637,25 @@ function controlMouseUp(event){if(event.button===0)releaseCounterCharge();if(eve
 window.addEventListener('mouseup',event=>dispatchBinding(event,false,`Mouse${event.button}`));
 window.addEventListener('pointercancel', () => {blockButtonHeld=false;blockQueuedAt=null;releaseBlock({immediate:true});});
 function combatPointerActive(){return inPractice&&!settings.opened&&!equipmentMenu.opened&&!restSite.opened&&battle.player.health>0&&(!runGame?.run||runGame.run.status==='battle')&&!document.querySelector?.('dialog[open]');}
-function requestCombatPointer(){if(combatPointerActive()&&document.pointerLockElement!==canvas){try{canvas.requestPointerLock?.()?.catch?.(error=>console.warn('Pointer lock unavailable:',error.message));}catch{}}}
+const POINTER_ESCAPE_RECOVERY_MS=1300;
+let pointerRetryUntil=0,pointerRetryTimer,pointerRequestInFlight=false,pointerReleasedByMenu=false;
+function cancelPointerRetry(){
+  clearTimeout(pointerRetryTimer);
+  pointerRetryTimer=undefined;
+}
+function requestCombatPointer(){
+  if(!combatPointerActive()||document.hidden||!document.hasFocus()||document.pointerLockElement===canvas||pointerRequestInFlight)return;
+  const delay=pointerRetryUntil-performance.now();
+  if(delay>0){
+    pointerRetryTimer??=setTimeout(()=>{pointerRetryTimer=undefined;requestCombatPointer();},Math.ceil(delay));
+    return;
+  }
+  cancelPointerRetry();
+  try{
+    pointerRequestInFlight=true;
+    Promise.resolve(canvas.requestPointerLock?.()).catch(error=>console.warn('Pointer lock unavailable:',error.message)).finally(()=>{pointerRequestInFlight=false;});
+  }catch{pointerRequestInFlight=false;}
+}
 document.addEventListener('pointerdown',requestCombatPointer);
 document.addEventListener('click',requestCombatPointer);
 window.addEventListener('keyup',event=>{if(event.code!=='Escape')requestCombatPointer();});
@@ -647,11 +665,16 @@ let combatPointerLocked=false;
 document.addEventListener('pointerlockchange',()=>{
   const locked=document.pointerLockElement===canvas;
   const released=combatPointerLocked&&!locked;
+  const releasedByMenu=pointerReleasedByMenu;
+  pointerReleasedByMenu=false;
   combatPointerLocked=locked;
   pointerX=undefined;
   document.body?.classList.toggle('combat-pointer-locked',locked);
   // Browsers can consume Escape to release Pointer Lock before sending a key event.
-  if(released&&combatPointerActive()&&document.hasFocus())settings.open();
+  if(released&&document.hasFocus()){
+    if(!releasedByMenu)pointerRetryUntil=performance.now()+POINTER_ESCAPE_RECOVERY_MS;
+    if(combatPointerActive())settings.open();
+  }
 });
 canvas.addEventListener('pointerenter', event => { pointerX = event.clientX; });
 let lockMouseAccum=0,lockMouseAt=0,lockSwitchAt=-Infinity;
@@ -1440,8 +1463,13 @@ let previousTime = performance.now();
 let nextFrameAt=previousTime;
 renderer.setAnimationLoop(time => {
   profile?.raf(time);
-  document.body?.classList.toggle('combat-cursor-hidden',combatPointerActive());
-  if(!combatPointerActive()&&document.pointerLockElement===canvas)document.exitPointerLock?.();
+  if(!combatPointerActive()){
+    if(pointerRetryTimer!==undefined)cancelPointerRetry();
+    if(document.pointerLockElement===canvas){
+      pointerReleasedByMenu=true;
+      document.exitPointerLock?.();
+    }
+  }
   if(equipmentMenu.opened&&tutorial.active)tutorial.update(tutorialState(),[],battle);
   if(settings.opened||equipmentMenu.opened){previousTime=time;nextFrameAt=time;return;}
   if(restSite.opened){

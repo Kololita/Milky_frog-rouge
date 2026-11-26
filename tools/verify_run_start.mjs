@@ -3,6 +3,7 @@ import {Battle} from '../src/battle.js';
 import {PLAYER_STATS} from '../src/battle-values.js';
 import {createEquipmentMenu} from '../src/equipment.js';
 import {EQUIPMENT} from '../src/equipment-catalog.js';
+import {resolveEquipment} from '../src/equipment-rolls.js';
 import {rollLoot} from '../src/loot.js';
 import {RunProgress} from '../src/run-map.js';
 import {deriveSeed,seededRandom} from '../src/run-random.js';
@@ -202,9 +203,19 @@ const roomDoc={body,createElement:roomElement,getElementById(id){
 const room=id=>roomDoc.getElementById(id);
 let launch,awarded;
 const runUI=createRunUI(roomDoc,{prepare(node,start){launch=start;},
+ enterRest(){room('rest-screen').hidden=false;},
  award(item){awarded=item.id;},eventState:()=>({health:100,maxHealth:100,potions:6,capacity:6})});
 runUI.jump({type:'shop'});
 const shopNode=runUI.run.selected;
+const skillOffer=runUI.run.shopStock.find(({id})=>EQUIPMENT.find(item=>item.id===id).slot==='skill');
+function findRoomElement(node,predicate){
+ if(predicate(node))return node;
+ for(const child of node.children){const match=findRoomElement(child,predicate);if(match)return match;}
+}
+const skillPreview=findRoomElement(body,node=>node.className==='shop-skill-effects');
+assert(skillPreview?.open,'Shop skill effects should be visible before purchase');
+const effectLines=skillPreview.children[1].children.map(line=>line.children.map(part=>part.textContent).join(''));
+assert.equal(effectLines.join('，'),resolveEquipment(skillOffer.id,skillOffer.roll).description);
 const nextNode=runUI.run.available()[0];nextNode.type='monster';
 room('run-view-map').click();
 const preview=body.children.find(node=>node.className==='run-map-preview');
@@ -217,16 +228,45 @@ assert.equal(runUI.run.path.at(-1),shopNode.id);
 assert.equal(room('run-map-canvas').children[runUI.run.map.nodes.indexOf(nextNode)].attributes['aria-current'],'location');
 assert(launch);
 
+function verifyMapRoundTrips(returnLabel){
+ const toolbar=room('run-toolbar'),screen=room('run-screen'),button=room('run-view-map');
+ const host=toolbar.parentElement,hidden=screen.hidden,selected=runUI.run.selected;
+ for(const close of [
+  ()=>button.click(),
+  ()=>preview.listeners.cancel({preventDefault(){}}),
+  ()=>{preview.close();preview.listeners.close();},
+ ]){
+  button.click();
+  assert(preview.open&&screen.parentElement===preview&&toolbar.parentElement===screen);
+  assert.equal(button.textContent,returnLabel);
+  close();
+  assert(!preview.open&&screen.parentElement===body&&screen.hidden===hidden);
+  assert(!toolbar.hidden&&toolbar.parentElement===host&&!button.disabled);
+  assert.equal(runUI.run.selected,selected);
+ }
+}
+for(let i=0;i<4;i++){
+ for(const type of ['shop','event','rest']){
+  runUI.jump({type});
+  verifyMapRoundTrips('返回房间');
+  room('run-view-map').click();
+  runUI.exit();
+  assert(!preview.open&&room('run-toolbar').hidden&&room('run-toolbar').parentElement===body);
+ }
+}
+
 runUI.start(boonSeeds.get('funds'),{ultimate:'rage',boon:'funds'});
 room('run-map-canvas').children[0].click();
 launch();
 runUI.tick({player:{health:100},allDefeated:true,enemies:[{}]});
+verifyMapRoundTrips('返回战利品');
 room('loot-choices').children[0].click();room('loot-confirm').click();
 assert.match(room('run-result-title').textContent,/\+1\d 金币|\+20 金币/);
 assert.equal(runUI.run.gold,70+runUI.run.lastGoldReward);
 
 runUI.start(boonSeeds.get('spoils'),{ultimate:'rage',boon:'spoils'});
 assert(room('loot-dialog').open);
+verifyMapRoundTrips('返回战利品');
 const startingId=runUI.run.lootChoices[0];
 room('loot-choices').children[0].click();room('loot-confirm').click();
 assert.equal(awarded,startingId);

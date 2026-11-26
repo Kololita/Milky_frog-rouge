@@ -2,9 +2,9 @@
 
 《奶蛙》是一款第三人称动作 Roguelike。你将操控一只会挥拳、翻滚和捧腹大笑的奶蛙，在十五层远征中选择路线、收集装备，并在旅程终点挑战武士。
 
-**源码版本 v0.3.2 · Windows x64 下载版本 v0.3.1**
+**Windows x64 · v0.3.2**
 
-[下载安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.1/Naiwa-0.3.1-Setup-x64.exe) · [下载免安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.1/Naiwa-0.3.1-Windows-x64.zip) · [查看更新说明](https://github.com/Kololita/Milky_frog-rouge/releases/tag/v0.3.1)
+[下载安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.2/Naiwa-0.3.2-Setup-x64.exe) · [下载免安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.2/Naiwa-0.3.2-Windows-x64.zip) · [查看更新说明](https://github.com/Kololita/Milky_frog-rouge/releases/tag/v0.3.2)
 
 ## 你会玩到什么
 
