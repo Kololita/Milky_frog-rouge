@@ -3,7 +3,7 @@ import {arrangeRunMap} from './run-map-layout.js';
 import {nextEquipmentUpgrade,rollEquipment} from './equipment-rolls.js';
 import {rollLoot,createLootProtection,hasLootAtLeast} from './loot.js';
 import {STARTING_ITEMS,EQUIPMENT} from './equipment-catalog.js';
-import {ENCOUNTER_POOLS,chooseFormation} from './encounter-formations.js';
+import {chooseElite,chooseFormation} from './encounter-formations.js';
 import {ENERGY_STATS} from './battle-values.js';
 import {rollRunBoons,runBoon,runClasses} from './run-start.js';
 export const MAP_LAYOUT=Object.freeze({
@@ -139,7 +139,7 @@ export function generateRunMap(seed){
  }
  for(const node of nodes){
   const {type}=node;
-  Object.assign(node,{type,name:NODE_LABELS[type],encounter:type==='boss'?'samurai':type==='elite'?ENCOUNTER_POOLS.elite[node.encounterRoll%ENCOUNTER_POOLS.elite.length]:null});
+  Object.assign(node,{type,name:NODE_LABELS[type],encounter:type==='boss'?'samurai':null});
  }
  arrangeRunMap(rows,MAP_LAYOUT,seededRandom(deriveSeed(root,'map-layout')));
  return {seed:root,rows,nodes,height:MAP_LAYOUT.height};
@@ -169,7 +169,9 @@ export class RunProgress{
    if(!state.lootChoices.length)state.status='victory';
   }
   state.lootUpgrades??={};
-  return Object.assign(Object.create(RunProgress.prototype),state,{plans,map:{...map,nodes},selected:byId.get(selected)??null});
+  const run=Object.assign(Object.create(RunProgress.prototype),state,{plans,map:{...map,nodes},selected:byId.get(selected)??null});
+  if(run.status==='preparing'&&run.selected.type==='elite')run.assignElite(run.selected);
+  return run;
  }
  snapshot(){
   const {map,selected,...state}=this;
@@ -267,7 +269,12 @@ export class RunProgress{
   if(!node)return null;
   if(this.status==='shop')this.finishShop();
   if(node.type==='monster')node.encounter=chooseFormation(node,this.ordinaryBattles,this.lastOrdinary);
+  if(node.type==='elite')this.assignElite(node);
   this.selected=node;this.status='preparing';return node;
+ }
+ assignElite(node){
+  const previous=this.map.nodes.findLast(room=>room.type==='elite'&&this.path.includes(room.id));
+  node.encounter=chooseElite(node,previous?.encounter);
  }
  cancel(){if(this.status==='preparing'){this.status='map';this.selected=null;}}
  beginEvent(){if(this.status!=='preparing'||this.selected.type!=='event')return false;this.eventResult=null;this.status='event';return true;}

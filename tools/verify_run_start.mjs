@@ -5,11 +5,40 @@ import {createEquipmentMenu} from '../src/equipment.js';
 import {EQUIPMENT} from '../src/equipment-catalog.js';
 import {rollLoot} from '../src/loot.js';
 import {RunProgress} from '../src/run-map.js';
-import {seededRandom} from '../src/run-random.js';
+import {deriveSeed,seededRandom} from '../src/run-random.js';
+import {chooseElite,ENCOUNTER_POOLS} from '../src/encounter-formations.js';
 import {createRunStartUI,rollRunBoons,RUN_BOON_POOLS,runClasses} from '../src/run-start.js';
 import {createRunUI} from '../src/run-ui.js';
 
 const seed='001234567';
+const elites=ENCOUNTER_POOLS.elite;
+for(const previous of [null,...elites]){
+ const eligible=elites.filter(id=>id!==previous),counts=new Map(eligible.map(id=>[id,0]));
+ const trials=12000;
+ for(let i=0;i<trials;i++){
+  const chosen=chooseElite({encounterRoll:deriveSeed(i,'encounter:4-0')},previous);
+  assert(counts.has(chosen));
+  counts.set(chosen,counts.get(chosen)+1);
+ }
+ for(const count of counts.values())assert(Math.abs(count-trials/eligible.length)<trials*.02);
+}
+{
+ const run=new RunProgress(seed);
+ const first=run.available()[0];first.type='elite';
+ assert(run.select(first.id)&&run.begin()&&run.finish(true));
+ assert(run.claimReward(run.lootChoices[0])&&run.advance());
+ const rest=run.available()[0];rest.type='rest';
+ assert(run.select(rest.id)&&run.beginRest()&&run.finishRest());
+ const next=run.available()[0];next.type='elite';next.encounterRoll=first.encounterRoll;
+ assert(run.select(next.id));
+ const chosen=next.encounter;
+ assert.notEqual(chosen,first.encounter);
+ run.cancel();
+ assert.equal(run.select(next.id).encounter,chosen);
+ const saved=JSON.parse(JSON.stringify(run.snapshot()));
+ saved.map.rows[next.layer].find(room=>room.id===next.id).encounter=first.encounter;
+ assert.equal(RunProgress.restore(saved).selected.encounter,chosen);
+}
 assert.deepEqual(runClasses().map(item=>item.id),['rage','fistwind']);
 assert.equal(RUN_BOON_POOLS.length,3);
 const boonSeeds=new Map();
