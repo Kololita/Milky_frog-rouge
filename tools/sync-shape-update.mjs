@@ -1,12 +1,73 @@
 import fs from 'node:fs/promises';
-import {SHAPES,SHAPE_POOLS} from '../src/equipment-shapes.js';
-const raw=await fs.readFile('docs/equipment/占地形状池.md','utf8'),typeNames={护甲:'armor',武器:'weapon',护符:'accessory',技能:'skill'};const config={};let type;
-for(const block of raw.split(/^## /m).slice(1)){
- type=Object.entries(typeNames).find(([name])=>block.startsWith(name+'形状池'))?.[1];if(!type)continue;config[type]={};let rarity;
- for(const part of block.split(/^### /m).slice(1)){rarity=part.split('\n')[0].trim();config[type][rarity]=[];for(const shape of part.split(/^#### /m).slice(1)){const id=shape.split('\n')[0].trim(),grid=shape.match(/```text\s*\n([.#\s]+?)```/)?.[1].trim().split(/\r?\n/);if(!grid)continue;const weight=Number(shape.match(/(?:权重[：:]?\s*|形状倍率)([\d.]+)/)?.[1]??SHAPES[id]?.multiplier??1);config[type][rarity].push({id,shape:grid,weight:Math.round(weight*100)/100});}}
+import {LEGACY_SHAPE_POOLS} from '../src/equipment-shape-data.js';
+
+const raw=(await fs.readFile(new URL('../docs/equipment/占地形状池.md',import.meta.url),'utf8')).replaceAll('\r\n','\n');
+const sections=new Map(raw.split(/^## /m).slice(1).map(block=>{
+ const newline=block.indexOf('\n');
+ return [block.slice(0,newline),block.slice(newline+1)];
+}));
+const poolNames={armor:'护甲',weapon:'武器',accessory:'护符'};
+const rarities=['white','green','blue','purple','gold'];
+const catalog={},knownIds=new Set(),footprints=new Map();
+const legacyIds=new Set(Object.values(LEGACY_SHAPE_POOLS).flat().map(({id})=>id));
+function footprint(shape){
+ const cells=shape.flatMap((row,y)=>[...row].flatMap((mark,x)=>mark==='.'?[]:[[x,y,mark]]));
+ const variants=[];
+ for(const direction of [1,-1]){
+  let points=cells.map(([x,y,mark])=>[x*direction,y,mark]);
+  for(let rotation=0;rotation<4;rotation++){
+   const minX=Math.min(...points.map(([x])=>x)),minY=Math.min(...points.map(([,y])=>y));
+   variants.push(points.map(([x,y,mark])=>`${x-minX},${y-minY},${mark}`).sort().join(';'));
+   points=points.map(([x,y,mark])=>[-y,x,mark]);
+  }
+ }
+ return variants.sort()[0];
 }
-const extra={white:['#..','##.'],green:['####'],blue:['#..','#..','###','#..'],purple:['###','#.#','###'],gold:['####','#...','#...','#...','####']};
-for(const [type,grades]of Object.entries(config))for(const [rarity,list]of Object.entries(grades))list.push({id:`${rarity}-${type}-extra`,shape:extra[rarity],weight:{white:1.6,green:1.08,blue:1.1,purple:1.06,gold:1.05}[rarity]});
-await fs.writeFile('src/equipment-shape-data.js','export const AUTHORED_SHAPE_POOLS='+JSON.stringify(config,null,2)+';\n');
-let source=await fs.readFile('src/equipment-shapes.js','utf8');source="import {AUTHORED_SHAPE_POOLS} from './equipment-shape-data.js';\n"+source;source+=`\nfor(const [type,grades]of Object.entries(AUTHORED_SHAPE_POOLS))for(const [rarity,list]of Object.entries(grades)){SHAPE_POOLS[type][rarity]=list.map(entry=>{const existing=SHAPES[entry.id],id=existing&&JSON.stringify(existing.shape)!==JSON.stringify(entry.shape)?type+'-'+entry.id:entry.id;SHAPES[id]={id,rarity,shape:entry.shape,metrics:analyzeShape(entry.shape),multiplier:entry.weight};return id;});}\n`;await fs.writeFile('src/equipment-shapes.js',source);
-let doc='# 占地形状池\n\n同类型同品质共享池，获得奖励时随机确定，随后固定。权重为属性形状倍率，最多两位小数；各候选等概率。基础数值直接采用装备设计稿，不再按稀有度预算自动放大。\n\n';for(const [type,grades]of Object.entries(config)){doc+=`## ${Object.keys(typeNames).find(k=>typeNames[k]===type)}形状池\n\n`;for(const [rarity,list]of Object.entries(grades)){doc+=`### ${rarity}\n\n`;for(const e of list)doc+=`#### ${e.id}\n\n权重：${e.weight.toFixed(2)}\n\n\`\`\`text\n${e.shape.join('\n')}\n\`\`\`\n\n`;}}await fs.writeFile('docs/equipment/占地形状池.md',doc);
+for(const section of (sections.get('形状目录')??'').split(/^### /m).slice(1)){
+ const [rarity,...blocks]=section.split(/^#### /m);
+ const grade=rarity.trim();
+ if(!rarities.includes(grade)||catalog[grade])throw Error(`无效目录品质：${grade}`);
+ catalog[grade]={};
+ for(const block of blocks){
+  const match=block.trim().match(/^([\w-]+)\n\n```text\n([.#*\n]+)\n```$/);
+  if(!match)throw Error(`无效形状定义：${block.split('\n')[0]}`);
+  const [,id,grid]=match;
+  const shape=grid.split('\n');
+  if(knownIds.has(id)||legacyIds.has(id)||id.endsWith('-extra')||!/[#*]/.test(grid)||shape.some(row=>row.length!==shape[0].length)){
+   throw Error(`形状重复或数据无效：${id}`);
+  }
+  const key=footprint(shape);
+  if(footprints.has(key))throw Error(`形状相同：${id} 与 ${footprints.get(key)}`);
+  footprints.set(key,id);
+  knownIds.add(id);
+  catalog[grade][id]=shape;
+ }
+}
+if(rarities.some(rarity=>!catalog[rarity]))throw Error('形状目录缺少品质');
+
+const config={};
+for(const [type,name] of Object.entries(poolNames)){
+ const grades=config[type]={};
+ for(const block of (sections.get(name+'形状池')??'').split(/^### /m).slice(1)){
+  const [rarity,...lines]=block.trim().split('\n');
+  if(!rarities.includes(rarity)||grades[rarity])throw Error(`无效品质：${name} ${rarity}`);
+  const seen=new Set();
+  grades[rarity]=lines.filter(line=>line.trim()).map(line=>{
+   const [,id,weightText]=line.trim().match(/^- `([\w-]+)` +(\d+(?:\.\d{1,2})?)$/)??[];
+   const weight=Number(weightText);
+   if(!Object.hasOwn(catalog[rarity],id)||!(weight>0)||seen.has(id))throw Error(`无效或重复的池条目：${name} ${line}`);
+   seen.add(id);
+   return {id,weight};
+  });
+  if(!grades[rarity].length)throw Error(`空形状池：${name} ${rarity}`);
+ }
+ if(rarities.some(rarity=>!grades[rarity]))throw Error(`缺少品质：${name}`);
+}
+config.skill={};
+const render=data=>'{\n'+Object.entries(data).map(([group,entries])=>
+ `  ${group}:{\n${Object.entries(entries).map(([id,value])=>'    '+JSON.stringify(id)+':'+JSON.stringify(value)+',').join('\n')}\n  },`).join('\n')+'\n}';
+const source='export const SHAPE_CATALOG='+render(catalog)+';\n\n'
+ +'export const AUTHORED_SHAPE_POOLS='+render(config)+';\n\n'
+ +'// Exact layouts and multipliers for names recorded by prior versions.\n'
+ +'export const LEGACY_SHAPE_POOLS='+JSON.stringify(LEGACY_SHAPE_POOLS,null,2)+';\n';
+await fs.writeFile(new URL('../src/equipment-shape-data.js',import.meta.url),source);

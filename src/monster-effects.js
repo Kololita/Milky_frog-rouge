@@ -1,4 +1,4 @@
-import {createFlames,updateWaterClip,waterClipGLSL} from './flame-view.js';
+import {createFlames,updateWaterClip,waterClipGLSL,waterClipUniforms} from './flame-view.js';
 import {ATTACK_PREVIEW_LEAD,attackWarningActive,attackWarningColor,attackWarningPulse,attackWarningStart,recoveryStrikeTime} from './attack-warning.js';
 import {samuraiStrikeActive} from './samurai.js';
 import {createSamuraiPhaseEffects} from './samurai-phase-effects.js';
@@ -173,6 +173,8 @@ function lantern(root){
 function stonekeeper(root){
  const quake=ring(root,'stonekeeper_quake_effect','#9e927e');quake.rotation.x=Math.PI/2;quake.position.y=.035;
  const debris=motes(root,'stonekeeper_ground_debris','#77756e',24);
+ const waterCharge=ring(root,'stonekeeper_water_charge','#77d9f5');
+ waterCharge.position.set(.46,.92,.62);
  // One ground decal for all fissures. Branches open from the embedded head outwards.
  const fractureMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{growth:{value:0}},vertexShader:`varying vec2 ground;void main(){ground=(uv-.5)*2.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`
  varying vec2 ground;uniform float growth;
@@ -188,7 +190,7 @@ function stonekeeper(root){
  }`});
  const fissures=new THREE.Mesh(new THREE.PlaneGeometry(1,1),fractureMaterial);
  fissures.rotation.x=-Math.PI/2;fissures.visible=false;root.add(fissures);
- return (e,time)=>{
+ return (e,time,prep)=>{
   const swinging=e.swingDuration??0;
   const release=e.move?.recoveryStrike;
   const releaseAt=release?recoveryStrikeTime(release):Infinity;
@@ -206,6 +208,16 @@ function stonekeeper(root){
    fissures.scale.setScalar(radius*2);
    fractureMaterial.uniforms.growth.value=Math.min(1,age/.18);
   }
+  const water=e.move?.element==='water';
+  waterCharge.visible=water&&e.move?.kind==='projectile'&&e.state==='windup';
+  if(waterCharge.visible){
+   waterCharge.material.uniforms.shape.value.set(.12,.23,0,2.2);
+   waterCharge.material.uniforms.motion.value.x=prep;
+   waterCharge.material.uniforms.clock.value=time;
+   waterCharge.material.opacity=.25+.55*prep;
+  }
+  quake.material.color.set(water?'#64d6f5':'#9e927e');
+  debris.mesh.material.color.set(water?'#a3e9ff':'#77756e');
   quake.visible=show;
   debris.mesh.visible=show&&struck;
   if(!show)return;
@@ -245,7 +257,7 @@ function weaponTrail(root,name,color){
  });
  const trail=new THREE.Mesh(geometry,material);trail.name=name;trail.frustumCulled=false;root.add(trail);
  const a=new THREE.Vector3(),b=new THREE.Vector3();let written=0,cursor=0,cachedModel,cachedName,cachedBone;
- return {update(model,boneName,length,show){
+ return {setColor(color){material.uniforms.tint.value.set(color);},update(model,boneName,length,show){
   if(model!==cachedModel||boneName!==cachedName){cachedModel=model;cachedName=boneName;cachedBone=model?.getObjectByName(boneName);}const bone=cachedBone;trail.visible=Boolean(show&&bone);if(!trail.visible){written=cursor=0;return;}
   root.updateWorldMatrix(true,false);a.set(0,length*.70,0);b.set(0,length,0);bone.localToWorld(a);bone.localToWorld(b);root.worldToLocal(a);root.worldToLocal(b);
   a.toArray(history,cursor*6);b.toArray(history,cursor*6+3);
@@ -275,7 +287,24 @@ function samurai(root){
 }
 function scythemoth(root){
  const left=weaponTrail(root,'mantis_left_trail','#b4b898'),right=weaponTrail(root,'mantis_right_trail','#b4b898');
- return (e,time,prep,strike,recover,model)=>{const strikeNow=e.state==='windup'&&e.elapsed>=e.telegraph,both=['thrust','pounce'].includes(e.move?.motion);left.update(model,'scythe_L_2',.45,strikeNow&&(both||e.move?.motion==='cut-left'));right.update(model,'scythe_R_2',.45,strikeNow&&(both||e.move?.motion==='cut-right'));};
+ const charge=ring(root,'mantis_electric_charge','#a99cff');
+ charge.position.set(0,1.1,.62);
+ charge.material.uniforms.shape.value.set(.12,.25,0,6);
+ return (e,time,prep,strike,recover,model)=>{
+  const winding=e.state==='windup',strikeNow=winding&&e.elapsed>=e.telegraph;
+  const electric=e.move?.element==='electric';
+  charge.visible=winding&&electric;
+  if(charge.visible){
+   charge.material.uniforms.motion.value.x=prep;
+   charge.material.uniforms.clock.value=time;
+   charge.material.opacity=.16+prep*(.52+.22*Math.sin(time*54));
+  }
+  const both=['thrust','pounce'].includes(e.move?.motion);
+  const tint=electric?'#b9a5ff':'#b4b898';
+  left.setColor(tint);right.setColor(tint);
+  left.update(model,'scythe_L_2',.45,strikeNow&&(both||e.move?.motion==='cut-left'));
+  right.update(model,'scythe_R_2',.45,strikeNow&&(both||e.move?.motion==='cut-right'));
+ };
 }
 function spitter(root){
  const charge=ring(root,'spitter_muzzle_charge','#91a6ac');
@@ -300,14 +329,12 @@ function cinderWarden(root){
  for(let i=0;i<stream.root.children.length;i++){const m=stream.root.children[i],z=.55+(i%14)*.46,spread=Math.tan(Math.PI/8)*z;m.position.set(((i*7%11)/10-.5)*spread*1.8,.45+(i%4)*.23,z);m.scale.set(1+z*.55,1,1);m.rotation.y=i%2?Math.PI/2:0;}
  const flowGeometry=new THREE.BufferGeometry(),spread=Math.tan(Math.PI/8)*7;
  flowGeometry.setAttribute('position',new THREE.Float32BufferAttribute([0,0,.4,-spread,0,7,spread,0,7],3));flowGeometry.setAttribute('uv',new THREE.Float32BufferAttribute([.5,0,0,1,1,1],2));
- const flowMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,uniforms:{water0:{value:new THREE.Vector3()},water1:{value:new THREE.Vector3()},water2:{value:new THREE.Vector3()},water3:{value:new THREE.Vector3()},clock:{value:0}},vertexShader:'varying vec3 waterWorld;varying vec2 v;void main(){v=uv;vec3 p=position+vec3(0.,.45+.35*float(gl_InstanceID),0.);waterWorld=(modelMatrix*vec4(p,1.)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}',fragmentShader:waterClipGLSL+'varying vec3 waterWorld;varying vec2 v;void main(){if(waterClips(waterWorld.xz,16.))discard;float edge=pow(max(0.,1.-abs(v.x*2.-1.)),.5);float wave=.55+.25*sin(v.y*36.-clock*18.+sin(v.x*22.+clock*3.));float fade=(1.-smoothstep(.65,1.,v.y));vec3 c=mix(vec3(1.,.72,.23),vec3(.95,.26,.04),v.y);gl_FragColor=vec4(c,edge*fade*wave*.25);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}'});
+ const flowMaterial=new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,uniforms:waterClipUniforms(),vertexShader:'varying vec3 waterWorld;varying vec2 v;void main(){v=uv;vec3 p=position+vec3(0.,.45+.35*float(gl_InstanceID),0.);waterWorld=(modelMatrix*vec4(p,1.)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}',fragmentShader:waterClipGLSL+'varying vec3 waterWorld;varying vec2 v;void main(){if(waterClips(waterWorld.xz,16.))discard;float edge=pow(max(0.,1.-abs(v.x*2.-1.)),.5);float wave=.55+.25*sin(v.y*36.-clock*18.+sin(v.x*22.+clock*3.));float fade=(1.-smoothstep(.65,1.,v.y));vec3 c=mix(vec3(1.,.72,.23),vec3(.95,.26,.04),v.y);gl_FragColor=vec4(c,edge*fade*wave*.25);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}'});
  const flow=new THREE.InstancedMesh(flowGeometry,flowMaterial,3);
  flowMaterial.forceSinglePass=true;
  flow.name='boiler_breath_flow';flow.frustumCulled=false;root.add(flow);
  const aura=createFlames(root,{count:52,radius:1.7,height:.22});aura.root.name='boiler_fire_ring';
- const ringClip={uniforms:{clock:{value:0},center:{value:new THREE.Vector2()},
-  water0:{value:new THREE.Vector3()},water1:{value:new THREE.Vector3()},
-  water2:{value:new THREE.Vector3()},water3:{value:new THREE.Vector3()}}};
+ const ringClip={uniforms:{...waterClipUniforms(),center:{value:new THREE.Vector2()}}};
  const ringUniforms=ringClip.uniforms;
  const ringMaterial=new THREE.MeshBasicMaterial({color:'#db873d',transparent:true,opacity:.18,side:THREE.DoubleSide,forceSinglePass:true,depthWrite:false});
  ringMaterial.onBeforeCompile=shader=>{
@@ -322,16 +349,16 @@ function cinderWarden(root){
  ringMesh.name='boiler_fire_ring_ground';ringMesh.rotation.x=-Math.PI/2;ringMesh.position.y=.025;root.add(ringMesh);
  const warning=ring(root,'boiler_pressure_warning','#fff');warning.rotation.x=-Math.PI/2;warning.position.y=.03;
  warning.material.toneMapped=false;
- return (e,time)=>{
+ return (e,time,_prepare,_strike,_recover,_model,rain)=>{
   const channel=e.state==='windup'&&e.move?.kind==='channel',shooting=channel&&e.elapsed>=e.telegraph;
   flow.visible=shooting&&e.health>0;flowMaterial.uniforms.clock.value=time;updateWaterClip(flowMaterial,e.waterZones);stream.update(shooting&&e.health>0,time,.9,e.waterZones);
   const auraActive=Boolean(e.activeAura)&&e.health>0;
-  aura.update(auraActive,time,.8,e.waterZones);
+  aura.update(auraActive,time,.8,e.waterZones,rain);
   ringMesh.visible=auraActive;
   if(auraActive){
    ringUniforms.clock.value=time;
    ringUniforms.center.value.set(e.x,e.z);
-   updateWaterClip(ringClip,e.waterZones);
+   updateWaterClip(ringClip,e.waterZones,rain);
   }
   const cast=e.state==='windup'&&e.move?.kind==='aura';
   const impactAt=e.hitAt??e.telegraph;

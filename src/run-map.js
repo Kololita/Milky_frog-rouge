@@ -6,6 +6,7 @@ import {STARTING_ITEMS,EQUIPMENT} from './equipment-catalog.js';
 import {chooseElite,chooseFormation} from './encounter-formations.js';
 import {ENERGY_STATS} from './battle-values.js';
 import {rollRunBoons,runBoon,runClasses} from './run-start.js';
+import {ASSEMBLY_BOARD_REVISION} from './assembly-board.js';
 export const MAP_LAYOUT=Object.freeze({
  layers:16,rowGap:200,padding:80,width:920,
  dashLength:3,dashGap:7,minNodeDistance:150,
@@ -196,7 +197,7 @@ export class RunProgress{
  get startingAssembly(){
   const ultimate=this.startingUltimate;
   if(!ultimate)return undefined;
-  return {ultimate,boards:{[ultimate]:{level:this.startingBoon?.boardLevel??0,placements:[]}}};
+  return {boardRevision:ASSEMBLY_BOARD_REVISION,ultimate,boards:{[ultimate]:{level:this.startingBoon?.boardLevel??0,placements:[]}}};
  }
  get guidedRoute(){
   const guide=this.plans.guide;

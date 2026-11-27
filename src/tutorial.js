@@ -1,3 +1,5 @@
+import {COUNTER_CHARGE} from './battle-values.js';
+
 const label=code=>({Mouse0:'鼠标左键',Mouse1:'鼠标中键',Mouse2:'鼠标右键',ShiftLeft:'Shift',Space:'空格'}[code]??code.replace(/^Key|^Digit/,''));
 export const TUTORIAL_SECTIONS=[{id:'basics',name:'基础操作与机制'},{id:'equipment',name:'装备与装配'},{id:'moves',name:'招式大全'}];
 export function createTutorial(doc,{bindings,exit,prepareAssembly=()=>{},closeAssembly=()=>{},prepareAbility=()=>{},prepareMove=()=>{}}){
@@ -24,7 +26,7 @@ export function createTutorial(doc,{bindings,exit,prepareAssembly=()=>{},closeAs
   {title:'卸下装备',text:()=> '选中一件已放入的装备，拖进红色回收站松开，或选中后点击回收站。装备会回到背包。',test:s=>s.equipment&&!s.holding&&(s.placements?.length??0)<(baseline.placements?.length??0)},
   {title:'装配一个技能',text:()=>`点击“添加装备”，选择长臂、汲能、护盾或聚能并放入棋盘。每次最多装一个技能。`,test:s=>s.equipment&&Boolean(s.skillEquipped)},
   {title:'释放技能',close:true,ability:'skill',energy:true,text:()=>`按 ${key('KeyE')} 释放刚装配的技能，消耗和效果由技能决定。`,test:(s,events)=>events.some(e=>e.type==='skillStarted')},
-  {title:'释放大招',ability:'ultimate',energy:true,text:()=>`按 ${key('KeyF')} 释放当前大招。狂暴提供霸体、加快攻击并让环境变慢；拳风让拳掌攻击附带远程劲风。`,test:(s,events)=>events.some(e=>e.type==='rageStarted'||e.type==='fistwindStarted')},
+  {title:'释放大招',ability:'ultimate',energy:true,text:()=>`按 ${key('KeyF')} 释放当前大招。狂暴提供霸体、加快攻击，命中时回血；拳风让拳掌攻击附带远程劲风。`,test:(s,events)=>events.some(e=>['rageStarted','fistwindStarted','elementalUltimateStarted'].includes(e.type))},
   {title:'转化金光',gold:true,text:()=>`获得金光后按 ${key('Mouse1')} 释放默认金光技能「汲取金光」，获得能量并恢复生命。攻击或闪避会中断，但已经汇聚的能量会保留。`,test:(s,events)=>events.some(e=>e.type==='energyGained')},
   {title:'主动大笑',text:()=>`按 ${key('Laugh')} 开始大笑，绿条会按被动大笑的速度恢复，敌方攻击伤害减半。移动、攻击或转动视角会立即结束大笑。`,test:s=>s.activeLaugh},
  ];
@@ -36,7 +38,7 @@ export function createTutorial(doc,{bindings,exit,prepareAssembly=()=>{},closeAs
   {id:'RunAttack',title:'跑步攻击',text:()=>`疾跑中按 ${key('Mouse0')} 或 ${key('KeyJ')} 双掌前推。稳住身形时可立即走动、闪避，但0.5秒内不能再次攻击。`,test:hit('跑步双掌')},
   {id:'jump',title:'原地跳、走跳与跑跳',text:()=>`站立、走动或疾跑时按 ${key('Space')}，会使用对应跳跃。跳跃不会打断移动方向。`,test:s=>Boolean(s.jumpName)},
   {id:'AirAttack',title:'跳跃下砸',text:()=>`先跳跃，再按攻击。会二次跃起蓄势，双拳向下砸地，随后后空翻站起；命中可击退并眩晕敌人。`,test:hit('跳跃下砸')},
-  {id:'CounterWave',title:'金光气功光球',gold:true,text:()=>`金光状态下按住 ${key('Mouse0')} 或 ${key('KeyJ')} 蓄力，松开发射光球。每档闪一下、增伤20%，最多三档；光球可穿透多个敌人。`,test:(s,events)=>events.some(e=>e.type==='waveReleased')},
+  {id:'CounterWave',title:'金光气功光球',gold:true,text:()=>`金光状态下按住 ${key('Mouse0')} 或 ${key('KeyJ')} 蓄力，松开后发射光球。点按时会自动蓄满${COUNTER_CHARGE.minimum}秒再发射。每档闪一下、增伤${Math.round(COUNTER_CHARGE.bonusPerStage*100)}%，最多${COUNTER_CHARGE.maxStages}档，满蓄额外增伤${Math.round(COUNTER_CHARGE.fullBonus*100)}%。光球可穿透多个敌人。`,test:(s,events)=>events.some(e=>e.type==='waveReleased')},
   {id:'BackThrow',title:'背摔',text:()=> '靠近可背摔目标的背后，一个身位内按攻击：过肩摔后跃起坐砸。目标倒地无敌，起身时可以追击；非人形目标通常不能背摔。',test:(s,events)=>events.some(e=>e.type==='backThrowCompleted')},
   {id:'DodgeRoll',title:'前滚翻',text:()=>`朝人物前方输入方向并点按 ${key('ShiftLeft')}，前滚避开攻击。闪避开始就有短暂无敌。`,test:s=>s.dodgeName==='DodgeRoll'},
   {id:'DodgeBackflip',title:'后空翻',text:()=>`保持人物朝向，按后方向并点按 ${key('ShiftLeft')}。在攻击等动作后的连携态可做出后空翻。`,test:s=>s.dodgeName==='DodgeBackflip'},

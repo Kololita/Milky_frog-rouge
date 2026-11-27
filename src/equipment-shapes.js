@@ -1,4 +1,4 @@
-import {AUTHORED_SHAPE_POOLS} from './equipment-shape-data.js';
+import {AUTHORED_SHAPE_POOLS,LEGACY_SHAPE_POOLS,SHAPE_CATALOG} from './equipment-shape-data.js';
 /** Unit-square shapes shared by equipment type and rarity. Rotation never changes power. */
 export function shapeCells(shape,rotation=0){
  let cells=shape.flatMap((row,y)=>[...row].flatMap((cell,x)=>(cell==='#'||cell==='*')?[[x,y]]:[]));
@@ -33,11 +33,12 @@ export function analyzeShape(shape){
  const difficulty=Math.min(1,.3*(1-compactness)+.25*Math.min(1,concave/4)+.15*Math.min(1,edgeExcess)+.3*(1-density));
  return {area,width,height,perimeter,corners,concave,compactness,fitDensity:density,difficulty};
 }
-export const SHAPES=Object.fromEntries(Object.entries(layouts).flatMap(([rarity,entries])=>Object.entries(entries).map(([name,shape])=>{
+const fallbackShapes=Object.fromEntries(Object.entries(layouts).flatMap(([rarity,entries])=>Object.entries(entries).map(([name,shape])=>{
  const metrics=analyzeShape(shape),id=`${rarity}-${name}`;
  // At most 0.75 extra cell-equivalents: more cells always grant more power within a rarity.
  return [id,{id,rarity,shape,metrics,multiplier:Number(((metrics.area+.75*metrics.difficulty)/SHAPE_REFERENCE_AREA[rarity]).toFixed(6))}];
 })));
+export const SHAPES={...fallbackShapes};
 const ids=(rarity,names)=>names.map(name=>`${rarity}-${name}`);
 const pool=choices=>Object.fromEntries(Object.entries(choices).map(([rarity,names])=>[rarity,ids(rarity,names)]));
 export const SHAPE_POOLS={
@@ -46,13 +47,42 @@ export const SHAPE_POOLS={
  accessory:pool({white:['domino','elbow','bar'],green:['tee','zig','cross'],blue:['stair','guard','hook'],purple:['river','bridge','step'],gold:['star','crown','e']}),
  skill:pool({white:['elbow','domino','bar'],green:['cross','tee','hook'],blue:['fork','stair','guard'],purple:['bridge','gate','river'],gold:['star','e','titan']}),
 };
-export const FIXED_SKILL_SHAPES={
- shield:['###','###','.#.'],focus:['#.#','.#.','#.#'],longarm:['...#','.#.#','###.'],drain:['.##.','##.#','..##'],
-};
-for(const [id,shape]of Object.entries(FIXED_SKILL_SHAPES)){const shapeId='skill-fixed-'+id;SHAPES[shapeId]={id:shapeId,rarity:id==='shield'?'purple':'blue',shape,metrics:analyzeShape(shape),multiplier:1};}
-const emptyForgeShape={id:"charm-empty-forge-fixed",rarity:"gold",shape:["#"],metrics:analyzeShape(["#"]),multiplier:1};
-SHAPES[emptyForgeShape.id]=emptyForgeShape;
-export const shapePoolFor=item=>item.id==='charm-empty-forge'?[emptyForgeShape]:FIXED_SKILL_SHAPES[item.id]?[SHAPES['skill-fixed-'+item.id]]:(SHAPE_POOLS[equipmentShapeType(item)]?.[item.rarity]??[]).map(id=>SHAPES[id]);
+for(const [rarity,shapes] of Object.entries(SHAPE_CATALOG)){
+ for(const [id,shape] of Object.entries(shapes)){
+  SHAPES[id]={id,rarity,shape,metrics:analyzeShape(shape)};
+ }
+}
+const fixedIds={longarm:'skill-fixed-longarm',drain:'skill-fixed-drain',shield:'skill-fixed-shield',focus:'skill-fixed-focus','charm-empty-forge':'white-single'};
+export const FIXED_SKILL_SHAPES=Object.fromEntries(Object.entries(fixedIds).filter(([id])=>id!=='charm-empty-forge').map(([id,shapeId])=>[id,SHAPES[shapeId].shape]));
+const fixedShapes=Object.fromEntries(Object.entries(fixedIds).map(([id,shapeId])=>[id,{...SHAPES[shapeId],multiplier:1}]));
+const weightedPools={};
+for(const [type,grades] of Object.entries(AUTHORED_SHAPE_POOLS)){
+ weightedPools[type]={};
+ for(const [rarity,list] of Object.entries(grades)){
+  weightedPools[type][rarity]=list.map(({id,weight})=>({...SHAPES[id],multiplier:weight}));
+  SHAPE_POOLS[type][rarity]=list.map(({id})=>id);
+ }
+}
+const legacyPools=Object.fromEntries(Object.entries(LEGACY_SHAPE_POOLS).map(([type,list])=>
+ [type,list.map(({id,rarity,shape,weight})=>({id,rarity,shape,metrics:analyzeShape(shape),multiplier:weight}))]));
+export function shapePoolFor(item){
+ const fixed=fixedShapes[item.id];
+ if(fixed)return [fixed];
+ const type=equipmentShapeType(item),rarity=item.rarity;
+ return weightedPools[type]?.[rarity]??(SHAPE_POOLS[type]?.[rarity]??[]).map(id=>fallbackShapes[id]);
+}
 export const defaultShapeFor=item=>shapePoolFor(item)[0]?.shape;
-
-for(const [type,grades]of Object.entries(AUTHORED_SHAPE_POOLS))for(const [rarity,list]of Object.entries(grades)){SHAPE_POOLS[type][rarity]=list.map(entry=>{const existing=SHAPES[entry.id],id=existing&&(JSON.stringify(existing.shape)!==JSON.stringify(entry.shape)||existing.multiplier!==entry.weight)?type+'-'+entry.id:entry.id;SHAPES[id]={id,rarity,shape:entry.shape,metrics:analyzeShape(entry.shape),multiplier:entry.weight};return id;});}
+export function shapeForRoll(item,id){
+ if(!item||!id)return undefined;
+ const active=shapePoolFor(item).find(shape=>shape.id===id);
+ if(active)return active;
+ if(item.id==='charm-empty-forge'&&id==='charm-empty-forge-fixed')return {...fixedShapes[item.id],id};
+ if(fixedShapes[item.id])return undefined;
+ const legacy=legacyPools[equipmentShapeType(item)]??[];
+ const sameRarity=legacy.find(shape=>shape.id===id&&shape.rarity===item.rarity);
+ if(sameRarity||!item.previousRarity)return sameRarity;
+ // Existing copies retain the footprint from before this item changed rarity.
+ const oldRarity=item.previousRarity;
+ return shapePoolFor({...item,rarity:oldRarity}).find(shape=>shape.id===id)
+  ??legacy.find(shape=>shape.id===id&&shape.rarity===oldRarity);
+}

@@ -1,11 +1,20 @@
 export const EQUIPMENT_DATA=[
+  {id:'armor-tideweave',slot:'armor',name:'潮纹软甲',rarity:'blue',health:16,regen:1.5,passives:{elementalFury:1}},
+  {id:'fist-embergrip',slot:'gloves',name:'余烬拳套',rarity:'blue',attackSpeed:.08,regen:1.2,passives:{elementalFury:1}},
+  {id:'charm-sparkcoil',slot:'charm',name:'引电铜环',rarity:'blue',attack:1.1,pose:4,passives:{elementalFury:1}},
+  {id:'armor-stormmantle',slot:'armor',name:'雷纹披甲',rarity:'purple',physicalResistance:.06,regen:2,passives:{elementalFury:1,electricSpecialist:1}},
+  {id:'fist-tidebreaker',slot:'gloves',name:'破潮臂铠',rarity:'purple',attack:2.5,regen:1.8,passives:{elementalFury:1,waterSpecialist:1}},
+  {id:'charm-cinderlens',slot:'charm',name:'藏火棱镜',rarity:'purple',attackSpeed:.05,potionHeal:.10,passives:{elementalFury:2,fireSpecialist:1}},
+  {id:'armor-triadcarapace',slot:'armor',name:'三相重铠',rarity:'gold',health:27,regen:3,passives:{elementalFury:2,impactImmunity:1,poise:1}},
+  {id:'fist-triadforged',slot:'gloves',name:'三炼拳铠',rarity:'gold',attack:5,health:10,passives:{elementalFury:2,concentration:1,vigor:1}},
+  {id:'charm-triadheart',slot:'charm',name:'三相之心',rarity:'gold',physicalResistance:.06,attack:1.5,passives:{elementalFury:2,energy:1,medicine:1}},
   {id:'charm-empty-forge',slot:'charm',name:'无相玉',rarity:'gold',passives:{emptyForge:1}},
   {id:'charm-artisan',slot:'charm',name:'百炼刻印',rarity:'gold',regen:5,passives:{artisan:1,vigor:1}},
   {
     "id": "fist-dawn",
     "slot": "gloves",
     "name": "破晓拳铠",
-    "attack": 4,
+    "attack": 7,
     "attackSpeed": 0.1,
     "passives": {
       "openingStrike": 2,
@@ -14,7 +23,7 @@ export const EQUIPMENT_DATA=[
     },
     "rarity": "gold",
     "icon": "fist-dawn",
-    "description": "攻击力 +4，攻击速度 +10%，附加被动：当头一棒+2、精神抖擞+1、延锋+1",
+    "description": "攻击力 +7，攻击速度 +10%，附加被动：当头一棒+2、精神抖擞+1、延锋+1",
     "shape": [
       "###.#",
       "#.###",
@@ -27,14 +36,15 @@ export const EQUIPMENT_DATA=[
     "name": "先登银铠",
     "health": 20,
     "pose": 10,
+    "attack": 2,
     "passives": {
       "openingStrike": 1,
       "golden": 1,
-      "poise": 1
+      "vigor": 1
     },
     "rarity": "gold",
     "icon": "armor-vanguard",
-    "description": "最大生命 +20，绷住上限 +10，附加被动：当头一棒+1、金钟护体+1、破绷抗性+1",
+    "description": "最大生命 +20，绷住上限 +10，攻击力 +2，附加被动：当头一棒+1、金钟护体+1、精神抖擞+1",
     "shape": [
       "###",
       "#..",
@@ -119,9 +129,9 @@ export const EQUIPMENT_DATA=[
     "rarity": "white",
     "name": "软革背心",
     "icon": "armor-soft",
-    "reduction": 0.05,
+    "physicalResistance": 0.05,
     "passives": {},
-    "description": "受到生命伤害 -5%",
+    "description": "物理抗性+5%",
     "shape": [
       "##"
     ]
@@ -133,9 +143,9 @@ export const EQUIPMENT_DATA=[
     "name": "厚实护甲",
     "icon": "armor-heavy",
     "health": 6,
-    "reduction": 0.04,
+    "physicalResistance": 0.04,
     "passives": {},
-    "description": "最大生命 +6，受到生命伤害 -4%",
+    "description": "最大生命 +6，物理抗性+4%",
     "shape": [
       "##",
       "##"
@@ -162,9 +172,9 @@ export const EQUIPMENT_DATA=[
     "rarity": "green",
     "name": "引灵衣",
     "icon": "armor-channel",
-    "reduction": 0.05,
+    "physicalResistance": 0.05,
     "passives": {},
-    "description": "绷住恢复 +1/秒，受到生命伤害 -5%",
+    "description": "绷住恢复 +1/秒，物理抗性+5%",
     "regen": 1,
     "shape": [
       "##",
@@ -193,7 +203,7 @@ export const EQUIPMENT_DATA=[
     "icon": "armor-ranger",
     "health": 5,
     "passives": {},
-    "description": "最大生命 +5，攻击速度 +2%",
+    "description": "最大生命 +5，攻击速度 +2.5%",
     "attackSpeed": 0.025,
     "shape": [
       "##",
@@ -223,11 +233,11 @@ export const EQUIPMENT_DATA=[
     "name": "鳞片甲",
     "icon": "armor-scale",
     "health": 35,
-    "reduction": -0.1,
+    "physicalResistance": -0.1,
     "passives": {
       "comeback": 1
     },
-    "description": "最大生命 +35，受到生命伤害 --10%，附加被动：绝地反击+1",
+    "description": "最大生命 +35，物理抗性-10%，附加被动：绝地反击+1",
     "shape": [
       "###",
       "###"
@@ -241,12 +251,12 @@ export const EQUIPMENT_DATA=[
     "icon": "armor-knight",
     "health": 35,
     "pose": 20,
-    "reduction": 0.1,
+    "physicalResistance": 0.1,
     "passives": {
       "golden": 1,
       "poise": 1
     },
-    "description": "最大生命 +35，绷住上限 +20，受到生命伤害 -10%，附加被动：金钟护体+1、破绷抗性+1",
+    "description": "最大生命 +35，绷住上限 +20，物理抗性+10%，附加被动：金钟护体+1、破绷抗性+1",
     "shape": [
       "##.##",
       ".###.",
@@ -259,9 +269,9 @@ export const EQUIPMENT_DATA=[
     "rarity": "white",
     "name": "铁拳套",
     "icon": "fist-iron",
-    "attack": 2,
+    "attack": 1,
     "passives": {},
-    "description": "攻击力 +2",
+    "description": "攻击力 +1",
     "shape": [
       "##"
     ]
@@ -286,9 +296,9 @@ export const EQUIPMENT_DATA=[
     "name": "钢拳套",
     "icon": "fist-steel",
     "attack": 3,
-    "health": 3,
+    "health": 5,
     "passives": {},
-    "description": "最大生命 +3，攻击力 +3",
+    "description": "最大生命 +5，攻击力 +3",
     "shape": [
       "#..",
       "###"
@@ -300,11 +310,11 @@ export const EQUIPMENT_DATA=[
     "rarity": "green",
     "name": "猎手拳套",
     "icon": "fist-hunter",
-    "pose": 5,
-    "attack": 4,
+    "pose": -5,
+    "attack": 3,
     "passives": {},
-    "description": "绷住上限 +5，攻击力 +4，攻击速度 +6%",
-    "attackSpeed": 0.06,
+    "description": "绷住上限 -5，攻击力 +3，攻击速度 +10%",
+    "attackSpeed": 0.1,
     "shape": [
       "#..",
       "###"
@@ -351,12 +361,12 @@ export const EQUIPMENT_DATA=[
     "name": "赤战拳套",
     "icon": "fist-war",
     "health": -20,
-    "attack": 4,
+    "attack": 6,
     "passives": {
       "comeback": 1,
       "reach": 1
     },
-    "description": "最大生命 -20，攻击力 +4，附加被动：绝地反击+1、延锋+1",
+    "description": "最大生命 -20，攻击力 +6，附加被动：绝地反击+1、延锋+1",
     "shape": [
       "#..#",
       "####",
@@ -392,11 +402,11 @@ export const EQUIPMENT_DATA=[
     "pose": 20,
     "attack": 6,
     "passives": {
-      "comeback": 1,
+      "energy": 1,
       "reach": 1,
       "poise": 1
     },
-    "description": "最大生命 +30，绷住上限 +20，攻击力 +6，附加被动：绝地反击+1、延锋+1、破绷抗性+1",
+    "description": "最大生命 +30，绷住上限 +20，攻击力 +6，附加被动：能量精通+1、延锋+1、破绷抗性+1",
     "shape": [
       "###.#",
       "#.###",
@@ -485,11 +495,11 @@ export const EQUIPMENT_DATA=[
     "name": "壁垒护符",
     "icon": "charm-bastion",
     "pose": 30,
-    "reduction": 0.05,
+    "physicalResistance": 0.05,
     "passives": {
       "golden": 1
     },
-    "description": "绷住上限 +30，受到生命伤害 -5%，附加被动：金钟护体+1",
+    "description": "绷住上限 +30，物理抗性+5%，附加被动：金钟护体+1",
     "shape": [
       "##.",
       ".##",
@@ -503,12 +513,12 @@ export const EQUIPMENT_DATA=[
     "name": "赤心护符",
     "icon": "charm-blood",
     "health": 35,
-    "reduction": 0.08,
+    "physicalResistance": 0.08,
     "passives": {
       "golden": 1,
       "poise": 1
     },
-    "description": "最大生命 +35，受到生命伤害 -8%，附加被动：金钟护体+1、破绷抗性+1",
+    "description": "最大生命 +35，物理抗性+8%，附加被动：金钟护体+1、破绷抗性+1",
     "shape": [
       "##..",
       ".###",
@@ -543,9 +553,9 @@ export const EQUIPMENT_DATA=[
     "rarity": "white",
     "name": "素布衣",
     "icon": "armor-linen",
-    "pose": 6,
+    "pose": 7,
     "passives": {},
-    "description": "绷住上限 +6",
+    "description": "绷住上限 +7",
     "shape": [
       "##"
     ]
@@ -553,12 +563,14 @@ export const EQUIPMENT_DATA=[
   {
     "id": "fist-stone",
     "slot": "gloves",
-    "rarity": "white",
+    "rarity": "blue",
+    "previousRarity": "white",
     "name": "石片拳套",
     "icon": "fist-stone",
-    "attack": 1.5,
-    "passives": {},
-    "description": "攻击力 +1",
+    "attackSpeed": 0.1,
+    "physicalResistance": 0.05,
+    "passives": {"reach": 1},
+    "description": "攻击速度 +10%，物理抗性+5%，附加被动：延锋+1",
     "shape": [
       "##"
     ]
@@ -611,12 +623,12 @@ export const EQUIPMENT_DATA=[
     "rarity": "blue",
     "name": "荆棘轻甲",
     "icon": "armor-thorn",
-    "attack": 1.5,
+    "attack": 2,
     "health": -5,
     "passives": {
       "comeback": 1
     },
-    "description": "最大生命 -5，攻击力 +1，附加被动：绝地反击+1",
+    "description": "最大生命 -5，攻击力 +2，附加被动：绝地反击+1",
     "shape": [
       "###",
       "###"
@@ -649,9 +661,10 @@ export const EQUIPMENT_DATA=[
     "health": 15,
     "regen": -1,
     "passives": {
-      "impactImmunity": 2
+      "golden": 1,
+      "sumo": 1
     },
-    "description": "最大生命 +15，绷住恢复 -1/秒，附加被动：耐冲+2",
+    "description": "最大生命 +15，绷住恢复 -1/秒，附加被动：金钟护体+1、相扑手+1",
     "shape": [
       "##.##",
       ".###.",
@@ -685,12 +698,12 @@ export const EQUIPMENT_DATA=[
     "name": "流云御甲",
     "icon": "armor-cloud",
     "health": 20,
-    "reduction": 0.06,
+    "physicalResistance": 0.06,
     "passives": {
       "impactImmunity": 2,
       "golden": 1
     },
-    "description": "最大生命 +20，受到生命伤害 -6%，附加被动：耐冲+2、金钟护体+1",
+    "description": "最大生命 +20，物理抗性+6%，附加被动：耐冲+2、金钟护体+1",
     "shape": [
       "###",
       "#..",
@@ -817,15 +830,15 @@ export const EQUIPMENT_DATA=[
     "slot": "armor",
     "rarity": "gold",
     "name": "藏雷战甲",
-    "reduction": 0.04,
+    "physicalResistance": 0.04,
     "regen": 1,
     "passives": {
       "concentration": 1,
       "marksman": 1,
-      "sumo": 1
+      "energy": 1
     },
     "icon": "armor-quietstorm",
-    "description": "绷住恢复 +1/秒，受到生命伤害 -4%，附加被动：集中+1、射手潜能+1、相扑手+1",
+    "description": "绷住恢复 +1/秒，物理抗性+4%，附加被动：集中+1、射手潜能+1、能量精通+1",
     "shape": [
       "###",
       "#..",

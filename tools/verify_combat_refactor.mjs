@@ -17,9 +17,9 @@ for(const [name,base] of Object.entries(expected))for(const power of [5,10,12.5]
  assert(hits.every(e=>e.damage===damage));assert.equal(b.enemy.health,10000-damage*stats.times.length);
 }
 {
- const b=new Battle();b.enemy.z=1;b.enemy.superArmor=true;const wave=b.launchWave(pose);assert.equal(wave.damage,30);
- b.player.attackPower=20;b.updateWaves(.2);assert.equal(b.enemy.health,ENEMY_STATS.health-30,'Wave did not snapshot power at launch');
- assert.equal(b.launchWave(pose).damage,60);assert.equal(WAVE_STATS.motionMultiplier,3);
+ const b=new Battle();b.enemy.z=1;b.enemy.superArmor=true;const wave=b.launchWave(pose);assert.equal(wave.damage,36);
+ b.player.attackPower=20;b.updateWaves(.2);assert.equal(b.enemy.health,ENEMY_STATS.health-36,'Wave did not snapshot power at launch');
+ assert.equal(b.launchWave(pose).damage,72);assert.equal(WAVE_STATS.motionMultiplier,3.6);
 }
 for(const power of [5,10]){
  const b=new Battle();b.reset('samurai');b.enemy.z=1;b.enemy.heading=0;b.player.attackPower=power;

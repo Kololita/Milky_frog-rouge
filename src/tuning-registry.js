@@ -19,11 +19,14 @@ export function tuningFields(){
 }
 export function tuningRange(field){
   const key=field.path.at(-1),v=field.default;
-  const integer=/frames|Frame|Level|Resistance|Resilience|^health$|^pose$|^guard$|^max$|^gain$|energyCost|^capacity$|^count$|^restGain$/.test(key);
-  const positive=/^(health|pose|guard|max|duration|regenTick|energyCost|capacity|count)$/.test(key);
+  const integer=/frames|Frame|Level|Resistance|Resilience|^health$|^pose$|^guard$|^max$|^maxStages$|^gain$|energyCost|^capacity$|^count$|^restGain$/.test(key);
+  const positive=/^(health|pose|guard|max|duration|regenTick|energyCost|capacity|count|maxStages)$/.test(key);
   const min=v<0?v*3:v===0?0:integer?(positive?1:0):Math.min(.001,v/10);
   let max=Math.max(integer?10:.1,Math.abs(v)*3);
   if(/Opacity$|Ratio$|Fraction$|Chance$|^screenMargin$|^takeoff$|^contact$|^healthThreshold$|^damageReduction$/.test(key))max=1;
+  if(field.path.includes('resistances'))return {min:0,max:100,step:1};
+  if(key==='playerResistanceCap')return {min:0,max:99.99,step:.01};
+  if(key==='specialistConversion')return {min:0,max:1,step:.01};
   if(key==='halfAngle'||key==='reverseAngle')max=Math.PI;
   if(key==='heightMin'||key==='heightMax')max=6;
   if(key==='contactPhase')max=.7;

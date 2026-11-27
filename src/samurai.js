@@ -3,7 +3,8 @@ import {AttackMove,MovementMove} from './enemy-move.js';
 import {tunable} from './tuning-registry.js';
 import {steerEnemy} from './enemy-steering.js';
 import {ATTACK_PREVIEW_LEAD} from './attack-warning.js';
-export const SAMURAI_STATS=tunable('SAMURAI_STATS',{name:'武士',visual:'samurai',model:'samurai',visualScale:1.35,bodyHeight:2.25,health:2200,attackPower:6,radius:.55,superArmor:false,impactResistance:1,speed:1.7,turnRate:Math.PI*100/180,windupTurnRate:Math.PI*65/180,turnResponse:5,turnAcceleration:12,noticeRange:40,stopDistance:1.85,approachTolerance:.04,reach:2.2,halfAngle:Math.PI*.45,motionMultiplier:4,startupResilience:1,impactLevel:2,windup:.6,recovery:1.6,respawn:5,spawn:{x:0,z:6},uiHeight:2.42});
+import {COMBAT_DAMAGE_TYPES} from './combat-damage.js';
+export const SAMURAI_STATS=tunable('SAMURAI_STATS',{name:'武士',resistances:{normal:25,water:15,fire:20,electric:5,melee:15,ranged:10},visual:'samurai',model:'samurai',visualScale:1.35,bodyHeight:2.25,health:2200,attackPower:6,radius:.55,superArmor:false,impactResistance:1,speed:1.7,turnRate:Math.PI*100/180,windupTurnRate:Math.PI*65/180,turnResponse:5,turnAcceleration:12,noticeRange:40,stopDistance:1.85,approachTolerance:.04,reach:2.2,halfAngle:Math.PI*.45,motionMultiplier:4,startupResilience:1,impactLevel:2,windup:.6,recovery:1.6,respawn:5,spawn:{x:0,z:6},uiHeight:2.42});
 const cut=(label,windup,motionMultiplier,range,angle,lunge=0,swing=.26,startupResilience=3,motion='overhead',poseDamage=20,unblockable=false)=>new AttackMove({label,prepare:windup-swing,motionMultiplier,reach:range,halfAngle:(motion.includes('overhead')?75:angle)*Math.PI/180,lunge,swing,startupResilience,impactLevel:motion==='buried-overhead'?3:motion.includes('thrust')?2:startupResilience>=3?2:1,motion,poseDamage,unblockable,heightMin:motion==='round-sweep'?.1:motion.includes('thrust')?.65:motion.includes('overhead')?0:.45,heightMax:motion==='round-sweep'?.75:motion.includes('thrust')?1.4:motion.includes('overhead')?2.3:motion==='rising'?1.9:1.45});
 export const SAMURAI_RECOVERY=tunable('SAMURAI_RECOVERY',{link:.32,settle:.36,extractMin:1,extractMax:2});
 // Each routine owns its base wait; phase modifiers apply once when it starts.
@@ -63,6 +64,7 @@ export function samuraiSequence(name,phase=1){
   if(phase>=2){sequence[1].linkWait=.14;for(let i=0;i<3;i++){const move=follow(i%2?'cross-left':'cross-right',i===0?.36:.16);move.linkWait=.14;sequence.push(move);}}
   if(phase>=3){const move=cut('终式 · 当头重劈',.86,6.5,2.8,85,.45,.36,3,'overhead',48);move.prepareOverride=.5;sequence.push(move);}
  }else if(name!=='counter')for(let i=1;i<phase;i++)sequence.push(follow(i%2?'cross-right':'overhead',.35));
+ if(phase>=2)for(const move of sequence)move.element='electric';
  sequence.recoveryWait=SAMURAI_COMBOS[name].recoveryWait*samuraiWaitMultiplier(phase);
  return sequence;
 }
@@ -77,7 +79,7 @@ export function beginSamuraiTransition(battle){
  e.transitionDuration=Math.max(SAMURAI_TRANSITION.duration,e.transitionStrikeAt);
  e.state='transition';e.elapsed=0;e.turnVelocity=0;e.superArmor=true;e.sequence=null;e.extracting=false;e.swordAnchor=null;
  e.knockX=0;e.knockZ=0;e.transitionHit=false;
- e.move=new AttackMove({label:'引雷转阶段',motion:'phase-shift',prepare:e.transitionStrikeAt,swing:.01,
+ e.move=new AttackMove({...COMBAT_DAMAGE_TYPES.samuraiLightning,label:'引雷转阶段',motion:'phase-shift',prepare:e.transitionStrikeAt,swing:.01,
   reach:SAMURAI_TRANSITION.radius,halfAngle:Math.PI,heightMin:0,heightMax:4,
   motionMultiplier:SAMURAI_TRANSITION.motionMultiplier,poseDamage:SAMURAI_TRANSITION.poseDamage,
   stunDuration:SAMURAI_TRANSITION.stunDuration,impactLevel:1,unblockable:true,damageReduction:SAMURAI_TRANSITION.damageReduction,backThrowImmune:true});
@@ -101,7 +103,7 @@ export function updateSamurai(battle,dt,pose){
   if(e.state==='bait'){
     steerEnemy(e,pose,dt);const dx=pose.x-e.x,dz=pose.z-e.z,d=Math.hypot(dx,dz);
     if((battle.attackIntent??0)>e.baitAttackIntent){
-      e.state='evade';e.elapsed=0;e.move=backstep;e.evadeDuration=SAMURAI_EVADE.duration;e.evadeOrigin={x:e.x,z:e.z};
+      e.state='evade';e.elapsed=0;e.move=backstep;e.evadeDuration=SAMURAI_EVADE.duration;e.evadeOrigin={x:e.x,z:e.z};e.evadeTravel=0;
       const yaw=e.heading+Math.PI*.75;e.evadeTarget={x:e.x+Math.sin(yaw)*SAMURAI_EVADE.distance,z:e.z+Math.cos(yaw)*SAMURAI_EVADE.distance};
       e.turnVelocity=0;e.nextEvadeAt=battle.enemyTime+SAMURAI_EVADE.cooldown;return;
     }
@@ -110,7 +112,8 @@ export function updateSamurai(battle,dt,pose){
   }
   if(e.state==='evade'){
     const u=Math.min(1,e.elapsed/SAMURAI_EVADE.duration),travel=u*u*(3-2*u);
-    e.x=e.evadeOrigin.x+(e.evadeTarget.x-e.evadeOrigin.x)*travel;e.z=e.evadeOrigin.z+(e.evadeTarget.z-e.evadeOrigin.z)*travel;
+    const step=(travel-(e.evadeTravel??0))*(battle.enemyMovementRate?.(e)??1);
+    e.x+=(e.evadeTarget.x-e.evadeOrigin.x)*step;e.z+=(e.evadeTarget.z-e.evadeOrigin.z)*step;e.evadeTravel=travel;
     e.heading=Math.atan2(pose.x-e.x,pose.z-e.z);
     if(u>=1)beginBossSequence(battle,'counter');return;
   }
@@ -122,7 +125,7 @@ export function updateSamurai(battle,dt,pose){
       if(trackingDt>0)steerEnemy(e,pose,trackingDt,aim.rate);else e.turnVelocity=0;
     }
     const u=Math.max(0,Math.min(1,(e.elapsed-e.telegraph)/e.swingDuration)),travel=e.move.lunge*u*u*(3-2*u);
-    let step=Math.max(0,travel-e.lungeDone);
+    let step=Math.max(0,travel-e.lungeDone)*(battle.enemyMovementRate?.(e)??1);
     const forwardX=Math.sin(e.heading),forwardZ=Math.cos(e.heading),dx=pose.x-e.x,dz=pose.z-e.z;
     const along=dx*forwardX+dz*forwardZ,side=dx*forwardZ-dz*forwardX,clearance=e.radius+.40;
     if(along>0&&Math.abs(side)<clearance)step=Math.min(step,Math.max(0,along-Math.sqrt(clearance*clearance-side*side)));

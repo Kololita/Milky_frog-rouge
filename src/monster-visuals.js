@@ -1,3 +1,4 @@
+import {retreatHopPose} from './enemy-move.js';
 import {skipActorShadows} from './actor-shadows.js';
 import {createFlames} from './flame-view.js';
 import {createRiggedEnemy,hasEnemyModel} from './enemy-models.js';
@@ -182,10 +183,15 @@ export function createMonsterVisuals(parent){
   const prep=e.state==='windup'?smooth(e.elapsed/Math.max(.01,e.telegraph)):e.state==='recover'?1:0;
   const strike=e.state==='windup'?smooth((e.elapsed-e.telegraph)/Math.max(.01,e.swingDuration)):e.state==='recover'?1:0;
   const recover=e.state==='recover'?smooth(e.elapsed/Math.min(.5,e.recovery)):0;
-  entry.animate(e,battle.enemyTime,prep,strike,recover);
+  const hop=retreatHopPose(e);
+  if(hop){
+   root.position.y+=hop.lift;
+   root.scale.y-=hop.compression;
+  }
+  entry.animate(e,battle.enemyTime,prep,strike,recover,hop);
   for(const mat of entry.mats){mat.emissive.set('#eee4b1');mat.emissiveIntensity=Math.min(.7,e.flash*4);}
   effects.get(entry.rigged?battle.enemyStats.model:battle.enemyStats.visual)
-    .animate(e,battle.enemyTime,prep,strike,recover,entry.model);
+    .animate(e,battle.enemyTime,prep,strike,recover,entry.model,battle.rainZone);
   if(e.state==='dazed')root.rotation.z=.06*Math.sin(battle.enemyTime*9);
   if(e.state==='dead'&&!entry.rigged)root.rotation.z=-1.25;
   if(e.throwVisual&&['thrown','down','rising'].includes(e.state)){

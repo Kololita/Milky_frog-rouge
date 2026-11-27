@@ -1,5 +1,16 @@
+import {DAMAGE_ELEMENTS,ELEMENTAL_DAMAGE,ELEMENTAL_SPECIALISTS} from './combat-damage.js';
+
+const elementalSpecialists=Object.fromEntries(Object.entries(ELEMENTAL_SPECIALISTS).map(([element,id])=>[id,{
+ name:DAMAGE_ELEMENTS[element]+'系专职',max:1,
+ effect:()=>`将普通属性攻击的${Math.round(100*ELEMENTAL_DAMAGE.specialistConversion)}%伤害转为${DAMAGE_ELEMENTS[element]}属性伤害`,
+}]));
+
+export const EMPTY_FORGE_PHYSICAL_PER_CELL=1;
+export const GOLDEN_GUARD={healthThreshold:.8,physicalPerLevel:4};
 export const EQUIPMENT_PASSIVES={
- emptyForge:{name:'无中生有',max:1,effect:()=> '每个未占据的开放格 +2 最大生命、+1% 免伤、+0.5 攻击力'},
+ ...elementalSpecialists,
+ elementalFury:{name:'元素之怒',max:5,icon:'elemental-fury',effect:l=>`水、火、电属性伤害+${Math.round(l*ELEMENTAL_DAMAGE.furyPerLevel*100)}%`},
+ emptyForge:{name:'无中生有',max:1,effect:()=>`每个未占据的开放格提供最大生命+2、物理抗性+${EMPTY_FORGE_PHYSICAL_PER_CELL}%、攻击力+0.5`},
  artisan:{name:'工匠',max:1,effect:()=> '战斗胜利时，若期间未因敌方攻击损失生命，可精简一件装备'}, 
  concentration:{name:'集中',max:3,effect:l=>`蓄力时间缩短${[0,10,25,40][l]}%`},
  marksman:{name:'射手潜能',max:5,effect:l=>`远程攻击伤害+${l*10}%`},
@@ -12,7 +23,7 @@ export const EQUIPMENT_PASSIVES={
  flasks:{name:'血瓶增加',max:5,effect:l=>`血瓶携带上限+${l}`},
  energy:{name:'能量精通',max:3,effect:l=>`能量获取+${l*10}%`},
  poise:{name:'破绷抗性',max:3,effect:l=>`受到破绷伤害减少${l*8}%`},
- golden:{name:'金钟护体',max:3,effect:l=>`生命高于80%时受到伤害减少${l*4}%`},
+ golden:{name:'金钟护体',max:3,effect:l=>`生命高于${GOLDEN_GUARD.healthThreshold*100}%时物理抗性+${l*GOLDEN_GUARD.physicalPerLevel}%`},
  reach:{name:'延锋',max:3,effect:l=>`攻击距离+${l*3}%`},
  medicine:{name:'药理',max:3,effect:l=>`血瓶回复量+${l*10}%`},
 };

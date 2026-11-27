@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {Battle} from '../src/battle.js';
 import {ATTACK_STATS} from '../src/battle-values.js';
+import {damageResistanceMultiplier} from '../src/combat-damage.js';
 import {SAMURAI_MOVES} from '../src/samurai.js';
 import {hitboxWirePoints} from '../src/hitbox-view.js';
 const pose={x:0,z:0,heading:0,height:1,guarding:false};
@@ -14,7 +15,7 @@ b.beginAttack('Attack1');b.resolveAttack(.3,{...pose,height:2});assert.equal(b.e
 const event=b.takeEvents().find(e=>e.type==='debugHitbox'),points=hitboxWirePoints(event);
 assert.equal(Math.min(...points.map(p=>p.y)),event.yMin);assert.equal(Math.max(...points.map(p=>p.y)),event.yMax);
 b.enemy.height=3;b.launchWave({...pose,height:0});b.updateWaves(.2);assert.equal(b.enemy.health,b.enemy.maxHealth,'Ground wave hits a high target');
-b.enemy.height=0;b.waves=[];b.launchWave({...pose,height:0});b.updateWaves(.2);assert.equal(b.enemy.health,b.enemy.maxHealth-30);
+b.enemy.height=0;b.waves=[];b.launchWave({...pose,height:0});b.updateWaves(.2);assert.equal(b.enemy.health,b.enemy.maxHealth-36);
 const html=await fs.readFile(new URL('../index.html',import.meta.url),'utf8');
 // The low shell model has a taller hurtbox so grounded punches can reach it.
 for(const [name,attack] of Object.entries(ATTACK_STATS)){
@@ -22,7 +23,8 @@ for(const [name,attack] of Object.entries(ATTACK_STATS)){
  const grounded={x:0,z:0,heading:0,height:0,landed:true};bug.beginAttack(name);
  let expected=bug.enemy.maxHealth;
  for(const time of attack.times){
-  expected=Math.round((expected-bug.playerDamage(attack.motionMultiplier))*100)/100;
+  const damage=Math.round(bug.playerDamage(attack.motionMultiplier)*damageResistanceMultiplier(bug.enemy.resistances,attack.element,attack.delivery)*100)/100;
+  expected=Math.round((expected-damage)*100)/100;
   bug.resolveAttack(time,grounded);
  }
  assert.equal(bug.enemy.health,expected,`${name} misses the shellbug's expanded hurtbox`);

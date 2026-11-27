@@ -32,7 +32,7 @@ import { ShiftTap, isShift } from './shift-tap.js';
 import { CharacterState, reconcileGesture } from './character-state.js';
 import { CommandBuffer } from './command-buffer.js';
 import { ActionBlend } from './action-blend.js';
-import {isAttack,attackRate,advanceAttackTime,attackCanFinish,ATTACK_RATE,airSlamRate,mobilityTime,jumpClearance,AirSlam,airDriftDistance} from './combat.js';
+import {isAttack,attackRate,advanceAttackTime,attackCanFinish,attackRecoveryGap,PALM_RELEASE_CLIP_TIME,airSlamRate,mobilityTime,jumpClearance,AirSlam,airDriftDistance} from './combat.js';
 import {createFloorProbe} from './floor-probe.js';
 import {ImpactFeedback} from './impact-feedback.js';
 import {Battle} from './battle.js';
@@ -176,7 +176,9 @@ const battleHUD=createBattleHUD(document,scene);
 let playerKnockback;
 let battleFrameTime;
 const keys = new Set();
-const movementKeys = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ShiftLeft', 'ShiftRight']);
+const attackInputsHeld=new Set();
+const directionKeys = new Set(['KeyW','KeyS','KeyA','KeyD']);
+const movementKeys = new Set([...directionKeys, 'ShiftLeft', 'ShiftRight']);
 const shiftTap = new ShiftTap();
 const orbit = { yaw:0,pitch:CAMERA.pitch,distance:CAMERA.initialDistance };
 const targetLock=new TargetLock();
@@ -293,7 +295,7 @@ let runGame;
 const equipmentMenu=createEquipmentMenu(document,window,{
   equip:loadout=>{battle.applyEquipment(loadout);battleHUD.update(battle);},
   canOpen:()=>!inPractice||battle.encounter.kind==='training',
-  onOpen(){keys.clear();shiftTap.reset();blockButtonHeld=false;blockQueuedAt=null;releaseBlock({immediate:true});pointerX=undefined;menuOpenedAt=performance.now()/1000;},
+  onOpen(){attackInputsHeld.clear();if(battle.counterCharge)cancelHeldCounterCharge();keys.clear();shiftTap.reset();blockButtonHeld=false;blockQueuedAt=null;releaseBlock({immediate:true});pointerX=undefined;menuOpenedAt=performance.now()/1000;},
   onClose(){resumeMenuTimers();runGame?.refreshEvent();restSite.refresh();},
 });
 function resumeMenuTimers(){
@@ -316,7 +318,7 @@ function showHome(){
   if(!homeScreen)return;
   runGame?.abandon();restSite.close();document.getElementById('app').classList.remove('on-map','on-rest');
   cameraOcclusion.clear();combatCamera.reset();
-  clearInput();battle.reset('practice',{runHealthBonus:0});arenaView.setMode('practice');returnToOrigin();inPractice=false;homeScreen.hidden=false;
+  clearInput();battle.reset('practice',{runHealthBonus:0,runGold:0,profession:null});arenaView.setMode('practice');returnToOrigin();inPractice=false;homeScreen.hidden=false;
   document.getElementById('app').classList.add('on-home');
   updateHomeRunButtons();
   clearCombatEffects();
@@ -324,12 +326,12 @@ function showHome(){
   orbit.yaw=Math.PI;orbit.distance=5.5;updateCamera();
   document.getElementById('home-practice').focus();
 }
-function enterArena(mode='practice',{run=false,floor=1}={}){
+function enterArena(mode='practice',{run=false,floor=0}={}){
   if(!loaded)return;
   if(!run)runGame?.abandon();restSite.close();document.getElementById?.('app')?.classList.remove('on-map','on-rest');
   cameraOcclusion.clear();combatCamera.reset();
   const mapRun=run?runGame?.run:null;
-  settings.close();battle.reset(mode,{floor,runHealthBonus:mapRun?.startingBoon?.health??0});
+  settings.close();battle.reset(mode,{floor,runHealthBonus:mapRun?.startingBoon?.health??0,runGold:mapRun?.gold??0,profession:mapRun?.startingUltimate??null});
   if(mapRun)for(const enemy of battle.enemies)enemy.seed=deriveSeed(mapRun.seedFor('enemy-ai'),enemy.id);
   blinkRandom=mapRun?seededRandom(mapRun.seedFor('blink')):Math.random;
   blinkCountdown=nextBlinkDelay(blinkRandom);
@@ -339,17 +341,20 @@ function enterArena(mode='practice',{run=false,floor=1}={}){
 practiceButton?.addEventListener('click',()=>{equipmentMenu.sandbox();enterArena();});
 const tutorialDirectory=document.getElementById('tutorial-directory');
 const tutorialState=()=>({activeLaugh:Boolean(battle.breakLaugh?.active),x:player.position.x,z:player.position.z,yaw:orbit.yaw,speed:velocity,sprint:currentMovement().sprint,locked:Boolean(targetLock.target),jumpName:activeJump?.name,dodgeName:activeDodge?.name,equipment:equipmentMenu.opened,skillEquipped:equipmentMenu.loadout.skill,ultimate:equipmentMenu.loadout.ultimate,assemblyActions:{...equipmentMenu.interactionCounts},holding:equipmentMenu.holding,now:performance.now()/1000,placements:equipmentMenu.assembly.boards[equipmentMenu.assembly.ultimate]?.placements??[]});
+function maxTutorialBoard(id){
+  while(equipmentMenu.upgrade(id)){}
+}
 function prepareTutorialMove(id){
   equipmentMenu.startRun();returnToOrigin();
   battle.enemy.x=0;battle.enemy.z=id==='BackThrow'?1:id==='CounterWave'?4:2;
   battle.enemy.heading=id==='BackThrow'?0:Math.PI;
   if(id?.startsWith('skill:')){const skill=id.slice(6);equipmentMenu.grant(skill);equipmentMenu.place(skill,1,1);battle.player.energy=100;}
-  if(id?.startsWith('ultimate:')){equipmentMenu.grant(id.slice(9));equipmentMenu.selectUltimate(id.slice(9));equipmentMenu.upgrade(id.slice(9));equipmentMenu.upgrade(id.slice(9));battle.player.energy=100;}
+  if(id?.startsWith('ultimate:')){const ultimate=id.slice(9);equipmentMenu.grant(ultimate);equipmentMenu.selectUltimate(ultimate);maxTutorialBoard(ultimate);battle.player.energy=100;}
   if(id==='DodgeBackflip'||id==='DodgeSide')characterState.begin('TutorialDirection');
 }
 const tutorial=createTutorial(document,{
   bindings:()=>settings.values.bindings,
-  prepareAssembly:()=>{equipmentMenu.startRun();equipmentMenu.upgrade('rage');equipmentMenu.upgrade('rage');equipmentMenu.grant('armor-light');equipmentMenu.grant('fist-guard',{shapeId:'blue-double-hinge'});equipmentMenu.grant('charm-thread');equipmentMenu.grant('fistwind');equipmentMenu.upgrade('fistwind');equipmentMenu.upgrade('fistwind');for(const id of ['longarm','drain','shield','focus'])equipmentMenu.grant(id);equipmentMenu.open();},
+  prepareAssembly:()=>{equipmentMenu.startRun();maxTutorialBoard('rage');equipmentMenu.grant('armor-light');equipmentMenu.grant('fist-guard',{shapeId:'blue-double-hinge'});equipmentMenu.grant('charm-thread');equipmentMenu.grant('fistwind');maxTutorialBoard('fistwind');for(const id of ['longarm','drain','shield','focus'])equipmentMenu.grant(id);equipmentMenu.open();},
   closeAssembly:()=>equipmentMenu.close(),prepareAbility:kind=>{
     restoreStanding({clearKeys:true});battle.clearBattleEffects();battle.player.health=battle.maxHealth;battle.player.energy=100;
     if(kind==='skill'&&!equipmentMenu.loadout.skill){equipmentMenu.clear();equipmentMenu.grant('longarm');equipmentMenu.place('longarm',1,1);}
@@ -376,9 +381,11 @@ runGame=createRunUI(document,{
   applyEvent:effect=>{battle.player.health=effect.health;battle.player.potions=effect.potions;if(effect.item)equipmentMenu.grant(effect.item,effect.roll);battleHUD.update(battle);},
   onNew(save,progress){
    equipmentMenu.startRun(save?.assembly??progress.startingAssembly,progress.inventory,{fixedUltimate:progress.startingUltimate});
-   battle.reset('practice',{floor:1,runHealthBonus:progress.startingBoon?.health??0});
+   battle.reset('practice',{floor:0,runHealthBonus:progress.startingBoon?.health??0,runGold:progress.gold,profession:progress.startingUltimate});
    if(save){
-    battle.player.health=Math.max(0,Math.min(battle.maxHealth,save.player.health));
+    const oldMax=save.player.maxHealth;
+    const health=Number.isFinite(oldMax)&&oldMax>0?save.player.health/oldMax*battle.maxHealth:save.player.health;
+    battle.player.health=Math.max(0,Math.min(battle.maxHealth,Math.round(health*100)/100));
     battle.player.potions=Math.max(0,Math.min(battle.potionCapacity,save.player.potions));
    }else battle.player.potions=Math.max(0,battle.player.potions-(progress.startingBoon?.potionCost??0));
    battleHUD.update(battle);
@@ -525,7 +532,8 @@ function clearCombatEffects(){
   for(const view of enemyViews){view.impactParticles.clear();view.dazeStars.visible=false;view.group.visible=false;}waveView.update(battle);enemyProjectileView.update(battle);battleHUD.clearEffects();
 }
 function clearInput() {
-  if(battle.counterCharge){battle.cancelCounterCharge();restoreStanding({preserveCounter:true});}
+  attackInputsHeld.clear();
+  if(battle.counterCharge)cancelHeldCounterCharge();
   battle.cancelAbsorption();
   keys.clear();
   shiftTap.reset();
@@ -555,13 +563,20 @@ function exitActiveLaugh(){
 }
 function controlKeyDown(event) {
   if(settings.opened||equipmentMenu.opened)return;
+  if(battle.earthRoll||battle.earthExit){
+    event.preventDefault();
+    if(directionKeys.has(event.code))keys.add(event.code);
+    return;
+  }
   if(!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&exitActiveLaugh()&&event.code==='Laugh'){event.preventDefault();return;}
   if(event.code==='KeyI'&&!event.repeat&&!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();equipmentMenu.open();return;}
-  if(battle.backThrow&&event.code!=='Home'&&!movementKeys.has(event.code))return;
+  const electricToggle=event.code==='KeyF'&&battle.loadout.ultimate==='electric';
+  if(battle.backThrow&&!electricToggle&&event.code!=='Home'&&!movementKeys.has(event.code))return;
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   const spec = gestures.find(item => item.code === event.code);
   if (!movementKeys.has(event.code) && !spec && !['KeyR','Home','KeyQ','KeyF','KeyI','KeyE','KeyH','Laugh'].includes(event.code)) return;
   event.preventDefault();
+  if(battle.electricChain&&spec?.name!=='Attack'&&!movementKeys.has(event.code)&&!['KeyF','KeyQ','Home'].includes(event.code))return;
   if (movementKeys.has(event.code)) {
     cancelBlockRelease();
     keys.add(event.code);
@@ -571,12 +586,12 @@ function controlKeyDown(event) {
     shiftTap.rememberDirections(keys);
   }
   else if (!event.repeat && loaded) {
-    if(battle.breakLaugh&&event.code!=='Home')return;
+    if(battle.breakLaugh&&!electricToggle&&event.code!=='Home')return;
     if(battle.player.health<=0 && event.code!=='Home')return;
     if (event.code === 'KeyR') restoreStanding();
     else if (event.code === 'Home') {if(runGame?.run?.status!=='battle')returnToOrigin();}
     else if (event.code === 'KeyQ') {targetLock.toggle(battle.nearestEnemy(player.position));if(targetLock.target)battle.focusEnemy(targetLock.target);updateCamera();}
-    else if (event.code === 'KeyF') battle.beginRage();
+    else if (event.code === 'KeyF') startPlayerUltimate();
     else if (event.code === 'KeyI') equipmentMenu.open();
     else if (event.code === 'KeyE') battle.beginSkill();
     else if(event.code==='Laugh'){
@@ -587,7 +602,8 @@ function controlKeyDown(event) {
   }
 }
 function controlKeyUp(event) {
-  if(event.code==='KeyJ')releaseCounterCharge();
+  if(battle.earthRoll||battle.earthExit){keys.delete(event.code);event.preventDefault();return;}
+  if(event.code==='KeyJ'&&!attackInputsHeld.size)releaseCounterCharge();
   if(settings.opened||equipmentMenu.opened)return;
   const dodgeKeys = isShift(event.code) ? shiftTap.release(event.code,performance.now(),keys) : null;
   keys.delete(event.code);
@@ -600,6 +616,10 @@ function dispatchBinding(event,down,physical) {
   if(settings.opened||equipmentMenu.opened||!inPractice)return;
   const code=settings.resolve(physical)??(physical==='ShiftRight'&&settings.values.bindings.ShiftLeft==='ShiftLeft'?'ShiftRight':null);
   if(!code)return;
+  if(code==='Mouse0'||code==='KeyJ'){
+    if(down)attackInputsHeld.add(physical);
+    else attackInputsHeld.delete(physical);
+  }
   if(code.startsWith('Mouse')){const mapped={button:Number(code.slice(5)),preventDefault:()=>event.preventDefault()};down?controlMouseDown(mapped):controlMouseUp(mapped);}
   else {const mapped={code,repeat:event.repeat,ctrlKey:event.ctrlKey,metaKey:event.metaKey,altKey:event.altKey,preventDefault:()=>event.preventDefault()};down?controlKeyDown(mapped):controlKeyUp(mapped);}
 }
@@ -611,6 +631,7 @@ canvas.addEventListener('contextmenu', event => event.preventDefault());
 canvas.addEventListener('auxclick', event => {if(event.button===1)event.preventDefault();});
 function controlMouseDown(event) {
   if(settings.opened||equipmentMenu.opened)return;
+  if(battle.earthRoll||battle.earthExit||(battle.electricChain&&event.button!==0)){event.preventDefault();return;}
   exitActiveLaugh();
   if(battle.breakLaugh||battle.backThrow)return;
   if (!loaded || battle.player.health<=0 || ![0,1,2].includes(event.button)) return;
@@ -633,9 +654,13 @@ function controlMouseDown(event) {
 }
 canvas.addEventListener('mousedown',event=>dispatchBinding(event,true,`Mouse${event.button}`));
 // Listen on the window so releasing over the UI or outside the canvas also works.
-function controlMouseUp(event){if(event.button===0)releaseCounterCharge();if(event.button===2){blockButtonHeld=false;blockQueuedAt=null;releaseBlock();}}
+function controlMouseUp(event){if(event.button===0&&!attackInputsHeld.size)releaseCounterCharge();if(event.button===2){blockButtonHeld=false;blockQueuedAt=null;releaseBlock();}}
 window.addEventListener('mouseup',event=>dispatchBinding(event,false,`Mouse${event.button}`));
-window.addEventListener('pointercancel', () => {blockButtonHeld=false;blockQueuedAt=null;releaseBlock({immediate:true});});
+window.addEventListener('pointercancel', () => {
+  for(const input of attackInputsHeld)if(input.startsWith('Mouse'))attackInputsHeld.delete(input);
+  if(!attackInputsHeld.size&&battle.counterCharge)cancelHeldCounterCharge();
+  blockButtonHeld=false;blockQueuedAt=null;releaseBlock({immediate:true});
+ });
 function combatPointerActive(){return inPractice&&!settings.opened&&!equipmentMenu.opened&&!restSite.opened&&battle.player.health>0&&(!runGame?.run||runGame.run.status==='battle')&&!document.querySelector?.('dialog[open]');}
 const POINTER_ESCAPE_RECOVERY_MS=1300;
 let pointerRetryUntil=0,pointerRetryTimer,pointerRequestInFlight=false,pointerReleasedByMenu=false;
@@ -680,7 +705,7 @@ canvas.addEventListener('pointerenter', event => { pointerX = event.clientX; });
 let lockMouseAccum=0,lockMouseAt=0,lockSwitchAt=-Infinity;
 // Locked mouse movement is relative and has no screen-edge limit.
 document.addEventListener('mousemove', event => {
-  if(!combatPointerActive())return;
+  if(!combatPointerActive()||battle.earthRoll||battle.earthExit)return;
   const locked=document.pointerLockElement===canvas;
   if(!locked&&event.target!==canvas)return;
   const delta=locked?event.movementX:(pointerX===undefined?0:event.clientX-pointerX);
@@ -809,6 +834,8 @@ function restoreStanding({clearKeys=false,preserveCounter=false}={}) {
   activeJump = undefined;
   activeDodge = undefined;
   activeAirAttack = undefined;
+  battle.earthExit=null;
+  modelPivot.visible=true;
   impactFeedback.reset();
   impactRing.visible=false;
   pivot = undefined;
@@ -819,7 +846,7 @@ function restoreStanding({clearKeys=false,preserveCounter=false}={}) {
   characterState.reset();
   commandBuffer.clear();
   readyCommand = undefined;
-  if(clearKeys) keys.clear();
+  if(clearKeys){keys.clear();attackInputsHeld.clear();}
   shiftTap.reset();
   velocity = 0;
   actions.Blink?.stop();
@@ -912,6 +939,7 @@ function startDodge(aim) {
   const {direction} = spec;
   const action = actions[spec.name];
   if (!action) return;
+  battle.stopElectricChain();
   pivot = undefined;
   heading = nextHeading;
   player.rotation.y = heading;
@@ -985,9 +1013,10 @@ function startAirAttack(aim) {
 function completeAttack(now=performance.now()/1000) {
   if(!activeGesture || !isAttack(activeGesture.name)) return;
   const name=activeGesture.name;
-  if(/^Attack[1-4]$/.test(name)){
+  const gap=attackRecoveryGap(name);
+  if(gap>0){
     activeGesture.gapStartedAt??=battle.time;
-    if(battle.time-activeGesture.gapStartedAt<ATTACK_RATE.normalGap-1e-9)return;
+    if(battle.time-activeGesture.gapStartedAt<gap-1e-9)return;
   }
   applyAttackTravel(activeGesture.action.time);
   battle.resolveAttack(activeGesture.action.time,battlePose());
@@ -996,13 +1025,27 @@ function completeAttack(now=performance.now()/1000) {
   else combo.finish(now);
   const speed=velocity;finishCommand(name,now);if(name==='RunAttack'){characterState.reset();velocity=speed;}
 }
-let releasingCounterCharge=false;
-function releaseCounterCharge(){if(!battle.counterCharge)return;if(!battle.releaseCounterCharge())return;restoreStanding({preserveCounter:true});releasingCounterCharge=true;triggerGesture(gestures.find(s=>s.name==='Attack'));if(activeGesture?.name==='CounterWave'){activeGesture.action.time=.35;const sample=attackMotion.CounterWave?.evaluate(.35);if(sample)attackTravel.set(sample[0],0,sample[2]);}releasingCounterCharge=false;}
+function cancelHeldCounterCharge(){
+  battle.cancelCounterCharge();
+  battle.expireCounter();
+  restoreStanding({preserveCounter:true});
+}
+function releaseCounterCharge(){
+  if(!battle.releaseCounterCharge())return;
+  restoreStanding({preserveCounter:true});
+  combo.enter(4,screenInputDirection(keys,camera.getWorldDirection(movementForward)));
+  playAttack(4,'CounterWave');
+  activeGesture.action.time=PALM_RELEASE_CLIP_TIME;
+  const sample=attackMotion.CounterWave?.evaluate(PALM_RELEASE_CLIP_TIME);
+  if(sample)attackTravel.set(sample[0],0,sample[2]);
+}
 function triggerGesture(spec, capturedAim = undefined) {
   if (!loaded || battle.player.health<=0) return;
+  if(spec.name==='Attack')battle.stopElectricChain();
+  if(battle.electricChain&&!spec.overlay&&spec.name!=='Dodge')return;
   if(battle.breakLaugh||battle.backThrow)return;
   if(battle.drinking){if(!['Attack','Dodge'].includes(spec.name))return;battle.cancelPotion('self');restoreStanding({preserveCounter:true});}
-  if(battle.counterCharge&&spec.name==='Attack'&&!releasingCounterCharge)return;
+  if(battle.counterCharge&&spec.name==='Attack')return;
   runAttackRecovery();
   if(spec.name==='Attack'&&battle.time<battle.runAttackLockUntil-1e-9)return;
   if(spec.name==='Attack'&&!battle.player.counterReady&&!activeJump&&!activeDodge&&!activeAirAttack&&tryStartBackThrow())return;
@@ -1029,11 +1072,13 @@ function triggerGesture(spec, capturedAim = undefined) {
   if (spec.name === 'Block' && activeGesture?.name === 'Block') {
     return;
   }
-  if(battle.counterCharge&&spec.name!=='Attack'&&!spec.overlay){battle.cancelCounterCharge();restoreStanding({preserveCounter:true});}
+  if(battle.counterCharge&&spec.name!=='Attack'&&!spec.overlay)cancelHeldCounterCharge();
   if(spec.name==='Attack'&&battle.player.counterReady&&!activeJump&&!activeDodge&&!activeAirAttack&&(!activeGesture||activeGesture.persistent||activeGesture.name==='Block')) {
+    if(!battle.beginCounterCharge())return;
     blockHeldAt=null;blockReleaseUntil=null;blockButtonHeld=false;blockQueuedAt=null;readyCommand=undefined;
-    if(!releasingCounterCharge&&battle.beginCounterCharge()){switchAction('CounterWave',true);currentAction.paused=true;currentAction.time=0;characterState.begin('Charge');activeGesture={name:'Charge',persistent:true,action:currentAction};return;}
-    combo.enter(4,aim);playAttack(4,'CounterWave');
+    switchAction('CounterWave',true);currentAction.paused=true;currentAction.time=0;
+    characterState.begin('Charge');activeGesture={name:'Charge',persistent:true,action:currentAction};
+    if(!attackInputsHeld.size)releaseCounterCharge();
     return;
   }
   if(spec.name==='Dodge'&&canDodgeFromHit()){
@@ -1127,6 +1172,10 @@ function currentMovement(now=performance.now()){
 }
 function runAttackRecovery(){const recovering=activeGesture?.name==='RunAttack'&&(activeGesture.recoveryStartedAt!==undefined||activeGesture.action.time>=.5-1e-9);if(recovering&&activeGesture.recoveryStartedAt===undefined){activeGesture.recoveryStartedAt=battle.time;battle.runAttackLockUntil=battle.time+.5;}return recovering;}
 function updateLocomotion(input,dt) {
+  if(battle.electricChain){
+    if(input.sprint)battle.stopElectricChain();
+    else input.sprintRamp=null;
+  }
   const movementUnlocked=characterState.isFree||Boolean(battle.drinking)||runAttackRecovery();
   if(characterState.isFree&&!activeJump&&input.sprint)combo.reset();
   const targetAim=movementUnlocked&&!activeJump&&!input.sprint ? lockedTargetAim() : null;
@@ -1174,8 +1223,10 @@ function updateCamera(dt=0) {
 }
 function battlePose() {
   return {x:player.position.x,z:player.position.z,heading,
+    lockedTarget:targetLock.target,
+    rolling:Boolean(battle.earthRoll),
     impactTime:battleFrameTime,
-    height:activeAirAttack?.sample?.height??activeJump?.height??0,
+    height:activeAirAttack?.sample?.height??activeJump?.height??battle.earthExit?.height??0,
     landed:Boolean(activeAirAttack?.sample?.landed),
     guarding:activeGesture?.name==='Block'&&blockHeldAt!==null,
     guardElapsed:blockHeldAt===null?Infinity:Math.max(0,performance.now()/1000-blockHeldAt),
@@ -1185,6 +1236,42 @@ function battlePose() {
     invulnerable:Boolean(activeDodge&&dodgeInvulnerable(activeDodge.name,activeDodge.elapsed)),
     dodgeName:activeDodge?.name,dodgeElapsed:activeDodge?.elapsed,
   };
+}
+function startPlayerUltimate(){
+  const earth=battle.loadout.ultimate==='earth';
+  if(earth&&(activeJump||activeDodge||activeAirAttack||activeGesture?.name==='Hit'||battle.drinking))return;
+  if(battle.loadout.ultimate==='electric'&&!battle.electricChain&&
+    (!characterState.isFree||activeGesture||activeJump||activeDodge||battle.drinking||
+     currentAction===actions.Run||currentMovement().sprint))return;
+  if(!battle.beginUltimate(battlePose(),targetLock.target))return;
+  if(earth){
+    restoreStanding({preserveCounter:true});
+    for(const code of keys)if(!directionKeys.has(code))keys.delete(code);
+    modelPivot.visible=false;
+  }
+}
+function arenaBoundary(x,z){
+  return battle.mode==='samurai'?arenaView.reedField.boundaryRadius(Math.atan2(z,x)):BOSS_ARENA_RADIUS;
+}
+function updateEarthControl(dt,input){
+  const ball=battle.earthRoll;
+  if(ball){
+    const boundary=battle.encounter.kind==='training'?undefined:arenaBoundary;
+    battle.moveEarthRoll(player.position,input.direction,dt,boundary,(dx,dz)=>playerEffects.rollEarth(dx,dz,ball.stats.radius));
+    return;
+  }
+  const exit=battle.earthExit;
+  if(!exit)return;
+  const {stats}=exit;
+  exit.elapsed+=dt;
+  const phase=Math.min(1,exit.elapsed/stats.exitDuration);
+  const pose=actions.DodgeBackflip;
+  pose.time=phase*pose.getClip().duration;
+  mixer.update(0);
+  exit.height=stats.exitHeight*Math.sin(Math.PI*phase);
+  modelPivot.position.y+=exit.height-(floorProbe()-player.position.y);
+  player.updateMatrixWorld(true);
+  if(phase>=1)restoreStanding({preserveCounter:true});
 }
 function canDodgeFromHit(){return activeGesture?.name==='Hit'&&battle.time>=activeGesture.dodgeAt-1e-9;}
 function receiveBattleHit(event) {
@@ -1199,7 +1286,7 @@ function receiveBattleHit(event) {
   hitAction.setEffectiveTimeScale(hitAction.getClip().duration/event.stun);
   playerKnockback=new THREE.Vector3(Math.sin(event.heading),0,Math.cos(event.heading)).multiplyScalar(event.knockback*12);
 }
-function updateBattle(dt,externalTimeScale=1) {
+function updateBattle(dt) {
   if(!battle.backThrow&&battle.enemy.health<=0){const next=targetLock.target?.health>0?targetLock.target:battle.nearestEnemy(player.position);if(next)battle.focusEnemy(next);}
   if(playerKnockback) {
     const decay=Math.exp(-12*dt);
@@ -1209,20 +1296,27 @@ function updateBattle(dt,externalTimeScale=1) {
   }
   const pose=battlePose();
   const pairedThrow=battle.backThrow;
-  battle.update(dt,pose,externalTimeScale);
+  battle.update(dt,pose);
   if(pairedThrow)applyBackThrowPose(pairedThrow.sample);
   if(battle.encounter.kind!=='training'){
     for(const actor of [...battle.enemies,player.position]){
+      if(actor===player.position&&pose.rolling)continue;
       const radius=Math.hypot(actor.x,actor.z);
-      const boundary=battle.mode==='samurai'
-        ?arenaView.reedField.boundaryRadius(Math.atan2(actor.z,actor.x))
-        :BOSS_ARENA_RADIUS;
+      const boundary=arenaBoundary(actor.x,actor.z);
       const limit=boundary-.6;
       if(radius>limit){actor.x*=limit/radius;actor.z*=limit/radius;}
     }
   }
   const events=battle.takeEvents();
   for(const event of events) {
+    if(event.type==='elementalUltimateStarted'&&event.id==='metal'&&settings.values.shake)impactFeedback.trigger();
+    if(event.type==='earthRollEnded'){
+      const {vx,vz}=battle.earthExit;
+      if(Math.hypot(vx,vz)>.05){heading=Math.atan2(vx,vz);player.rotation.y=heading;}
+      switchAction('DodgeBackflip',true);
+      actions.DodgeBackflip.paused=true;
+      modelPivot.visible=true;
+    }
     if(event.type==='breakLaughStarted')playLaughPose();
     if(event.type==='breakLaughEnded'&&activeGesture?.forced)restoreStanding({preserveCounter:true});
     if(event.type==='blocked'&&event.grade==='perfect') {
@@ -1255,7 +1349,7 @@ function updateBattle(dt,externalTimeScale=1) {
     if(faceActions.Laugh)faceActions.Laugh.time=faceActions.Laugh.getClip().duration*progress;
     mixer.update(0);
   }
-  const correction=battle.separation({x:player.position.x,z:player.position.z,height:pose.height});
+  const correction=battle.separation({x:player.position.x,z:player.position.z,height:pose.height,rolling:pose.rolling});
   player.position.x+=correction.x;player.position.z+=correction.z;
   battleHUD.update(battle,events,targetLock.target===battle.enemy&&battle.enemy.health>0);
   return events;
@@ -1487,17 +1581,17 @@ renderer.setAnimationLoop(time => {
   profile?.begin(time);
   const combatStart = profile && performance.now();
   impactFeedback.update(dt);
-  let battleEvents=[],externalWorldSpeed=1;
+  let battleEvents=[];
   if (loaded) {
     playerEffects.preparePose(throwGrip?.prepare);
     battle.debugHitboxes=Boolean(settings.values.hitboxes);
-    const raging=battle.isRaging(),attackSpeed=PLAYER_STATS.attackSpeed*(1+(battle.gear?.attackSpeed??0))*(raging?RAGE_STATS.attackSpeed:1),worldSpeed=raging?RAGE_STATS.worldSpeed:1;
-    externalWorldSpeed=worldSpeed;
-    battleFrameTime=battle.enemyTime+dt*worldSpeed;
-    updateControlState(time/1000);
+    const raging=battle.isRaging(),attackSpeed=PLAYER_STATS.attackSpeed*(1+(battle.gear?.attackSpeed??0))*(raging?RAGE_STATS.attackSpeed:1);
+    battleFrameTime=battle.enemyTime+dt;
+    const earthControlled=Boolean(battle.earthRoll||battle.earthExit);
+    if(!earthControlled)updateControlState(time/1000);
     const input = currentMovement(time);
-    updateLocomotion(input,dt);
-    if (activeGesture?.name !== 'Laugh') {
+    if(earthControlled)updateEarthControl(dt,input);else updateLocomotion(input,dt);
+    if (!earthControlled&&activeGesture?.name !== 'Laugh') {
       blinkCountdown -= dt;
       if (blinkCountdown <= 0) triggerGesture(gestures.find(spec => spec.name === 'Blink'));
     }
@@ -1537,7 +1631,7 @@ renderer.setAnimationLoop(time => {
       activeGesture.action.time=.5+.25*Math.min(1,(battle.time-activeGesture.recoveryStartedAt)/.5);
       if(commandBuffer.pending?.name==='Dodge'&&commandBuffer.has('RunAttack'))readyCommand=commandBuffer.take('RunAttack');
     }
-    if(battle.counterCharge&&activeGesture?.name==='Charge'){activeGesture.action.paused=true;activeGesture.action.time=Math.min(.35,battle.counterChargeElapsed*1.75);}
+    if(battle.counterCharge&&activeGesture?.name==='Charge'){activeGesture.action.paused=true;activeGesture.action.time=Math.min(PALM_RELEASE_CLIP_TIME,battle.counterChargeElapsed*1.75);}
     bodyBlend.update(dt);
     mixer.update(dt);
     if(activeJump) {
@@ -1577,10 +1671,11 @@ renderer.setAnimationLoop(time => {
       applyAttackTravel(activeGesture.action.time);
       battle.resolveAttack(activeGesture.action.time,battlePose());
     }
-    battleEvents=updateBattle(dt,worldSpeed);
-    if(battle.counterCharge&&battle.counterChargeElapsed>=3)releaseCounterCharge();
+    battleEvents=updateBattle(dt);
+    if(battle.counterChargeAutoRelease)releaseCounterCharge();
     tutorial.update(tutorialState(),battleEvents,battle);
     playerEffects.applyPose(battle,dt,battleEvents,activeGesture?.name==='Block');
+    modelPivot.visible=!battle.earthRoll;
     battleFrameTime=undefined;
   }
   profile?.mark('combatMs', performance.now() - combatStart);
@@ -1591,7 +1686,7 @@ renderer.setAnimationLoop(time => {
   battleHUD.updateTarget(battle,camera,settings.values.ui!=='none');
   for(let i=0;i<battle.enemies.length;i++){
     const view=enemyViews[i]??(enemyViews[i]=createEnemyView(scene));
-    view.update(battle.enemies.length===1?battle:battle.viewOf(battle.enemies[i]),camera,dt*externalWorldSpeed,i===0?battleEvents:[]);
+    view.update(battle.enemies.length===1?battle:battle.viewOf(battle.enemies[i]),camera,dt,i===0?battleEvents:[]);
     if(settings.values.ui==='none')view.health.visible=false;
   }
   for(let i=battle.enemies.length;i<enemyViews.length;i++)enemyViews[i].group.visible=false;

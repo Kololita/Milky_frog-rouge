@@ -1,3 +1,5 @@
+import {COMBAT_DAMAGE_TYPES} from './combat-damage.js';
+
 export const MOLTEN_POOL=Object.freeze({x:-7,z:3,radius:2.35,collisionRadius:2.58});
 export const BOILER_VALVES=Object.freeze([{x:-6,z:-2},{x:2,z:-6},{x:6,z:2},{x:-2,z:6}]);
 const valveCenter=BOILER_VALVES.reduce((center,valve)=>({
@@ -48,7 +50,7 @@ export function updateCooling(battle,pose){
   if(enemy.activeAura){enemy.nextAuraAt=battle.enemyTime+enemy.activeAura.cooldown;enemy.activeAura=null;}
   if(battle.enemyTime>=(enemy.nextCoolingTick??0)-1e-9){
    enemy.nextCoolingTick=battle.enemyTime+COOLING.tick;
-   battle.damageEnemy(enemy,COOLING.damage,{label:'冷却水',impactLevel:1,origin:{x:zone.x,z:zone.z,heading:0,ignoreImpactResistance:true},source:'environment',credited:false});
+   battle.damageEnemy(enemy,COOLING.damage,{...COMBAT_DAMAGE_TYPES.cooling,label:'冷却水',impactLevel:1,origin:{x:zone.x,z:zone.z,heading:0,ignoreImpactResistance:true},source:'environment',credited:false});
    if(enemy.state==='hurt')enemy.stun=Math.max(enemy.stun,.3);
   }
  }

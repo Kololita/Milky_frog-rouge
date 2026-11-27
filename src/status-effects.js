@@ -1,3 +1,5 @@
+import {combineResistances} from './combat-damage.js';
+
 /** Timed effects belong to the receiver, never to a particular caster's AI. */
 export class StatusEffects{
  constructor(){this.entries=new Map();this.time=0;}
@@ -5,8 +7,16 @@ export class StatusEffects{
  apply(effect,now=this.time){
   this.update(now);
   if(!effect?.type||!Number.isFinite(effect.amount)||!(effect.duration>0))return false;
-  const key=`${effect.type}:${effect.group??effect.type}`,old=this.entries.get(key);
-  const amount=old?(effect.stacking==='add'?old.amount+effect.amount:Math.max(old.amount,effect.amount)):effect.amount;
+  const key=effect.type==='resistance'?`resistance:${effect.element}:${effect.group??''}`:`${effect.type}:${effect.group??effect.type}`;
+  const old=this.entries.get(key);
+  let amount=effect.amount;
+  if(old){
+   if(effect.stacking!=='add')amount=Math.max(old.amount,amount);
+   else if(effect.type==='resistance'){
+    const element=effect.element;
+    amount=combineResistances({[element]:old.amount},{[element]:amount})[element];
+   }else amount+=old.amount;
+  }
   this.entries.set(key,{...effect,amount,until:now+effect.duration,...(effect.tickInterval>0?{nextTick:old?.nextTick??now+effect.tickInterval}:{})});return true;
  }
  tick(now,callback){for(const effect of this.entries.values())if(effect.tickInterval>0){while(effect.nextTick<=Math.min(now,effect.until)+1e-9){effect.nextTick+=effect.tickInterval;callback(effect,effect.amount*effect.tickInterval);}}this.update(now);}

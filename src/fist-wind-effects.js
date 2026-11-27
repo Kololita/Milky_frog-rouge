@@ -1,78 +1,94 @@
 import * as THREE from 'three';
 import {createEffectInstances} from './effect-instances.js';
+import {FISTWIND_STATS} from './battle-values.js';
 
-export function createFistWindEffects(scene,model){
- const root=new THREE.Group();root.name='拳风白气';root.userData.cameraOcclusion=false;scene.add(root);
+export function createFistWindEffects(scene,model,player){
+ const root=new THREE.Group();
+ root.name='拳风风场';
+ root.userData.cameraOcclusion=false;
+ scene.add(root);
  const hands=['handL','handR'].map(name=>model.getObjectByName(name));
  const point=new THREE.Vector3();
- const clock={value:0},elapsed={value:0};
+ const clock={value:0},elapsed={value:0},radius={value:FISTWIND_STATS.fieldRadius};
  const material=new THREE.ShaderMaterial({
-  transparent:true,depthWrite:false,
-  uniforms:{clock,elapsed,strength:{value:.13}},
+  transparent:true,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true,
+  uniforms:{clock,elapsed,radius},
   vertexShader:`
-   uniform float clock,elapsed;
+   uniform float clock,elapsed,radius;
    attribute vec4 origin;
-   attribute vec2 flight;
-   varying vec3 p;
+   attribute vec3 flight;
+   varying vec2 ribbonUv;
+   varying float fade;
    void main(){
-    p=position;
-    float id=float(gl_InstanceID%7);
-    vec3 center=origin.xyz,local;
+    ribbonUv=uv;
+    float u=uv.x,width=(uv.y-.5)*sin(u*3.141593);
+    vec3 p=origin.xyz;
+    fade=1.;
     if(origin.w<0.){
-     float a=clock*2.5+id*6.283185/7.;
-     center+=vec3(cos(a)*.09,sin(a*.7)*.045,sin(a)*.075);
-     local=position*vec3(.075,.055,.085);
+     float id=flight.x;
+     float angle=clock*(id==1.?-2.9:2.9)+id*2.094395+u*2.3;
+     float r=radius+.06*sin(angle*2.+id)+width*.15;
+     float wave=sin(angle+id*2.094395)*.39;
+     p+=vec3(r*cos(angle),.88+wave+width*.13,r*sin(angle));
     }else{
-     if(id==6.){gl_Position=vec4(2.,2.,2.,1.);return;}
-     float u=clamp((elapsed-origin.w)/.18,0.,1.);
-     float s=sin(flight.x),c=cos(flight.x);
-     center+=vec3(s,0.,c)*flight.y*u;
-     local=position*vec3(.10-id*.009,.07,.13)+vec3(0.,0.,-id*.06);
-     local=vec3(c*local.x+s*local.z,local.y,-s*local.x+c*local.z)*(1.+.8*u);
+     float t=clamp((elapsed-origin.w)/flight.z,0.,1.);
+     vec2 forward=vec2(sin(flight.x),cos(flight.x));
+     vec2 side=vec2(forward.y,-forward.x);
+     p.xz+=forward*(flight.y*t-(1.-u)*.57)+side*(width*.23+sin(u*3.141593)*.19);
+     p.y+=width*.18+.07*sin(u*3.141593);
+     fade=1.-t;
     }
-    gl_Position=projectionMatrix*modelViewMatrix*vec4(center+local,1.);
+    gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
    }`,
   fragmentShader:`
-   varying vec3 p;
-   uniform float clock,strength;
+   varying vec2 ribbonUv;
+   varying float fade;
    void main(){
-    float mist=.55+.22*sin(p.x*8.+clock*3.)*sin(p.y*7.-clock*2.)+.15*sin(p.z*11.+clock);
-    float edge=pow(max(0.,1.-abs(p.z)),2.);
-    gl_FragColor=vec4(.92,.97,.96,max(0.,mist*edge*strength));
+    float u=ribbonUv.x,v=ribbonUv.y;
+    float taper=smoothstep(0.,.16,u)*(1.-smoothstep(.78,1.,u));
+    float rim=1.-smoothstep(.10,.50,abs(v-.5));
+    float streak=.66+.34*cos(v*16.+u*2.);
+    gl_FragColor=vec4(.83,1.,.97,fade*taper*rim*streak*.78);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
    }`,
  });
- const shots=[];
+ const flights=[];
  const instances=createEffectInstances(root,{
-  initialCapacity:16,copies:7,
-  attributes:{origin:4,flight:2},
-  layers:[{geometry:new THREE.SphereGeometry(1,10,8),material}],
+  initialCapacity:16,copies:1,attributes:{origin:4,flight:3},
+  layers:[{geometry:new THREE.PlaneGeometry(1,1,24,1),material}],
  });
- function clear(){shots.length=0;instances.commit(0);elapsed.value=0;}
- return {clear,update(battle,events,dt){
+ function clear(){flights.length=0;instances.commit(0);elapsed.value=0;}
+ return {clear,update(battle,events,dt,lift=0){
   if(!battle.player.health){clear();return;}
   const active=battle.time<battle.player.fistwindUntil;
-  clock.value=battle.time;
-  elapsed.value+=dt;
-  for(const e of events)if(e.type==='windShot'){
-   point.set(e.x,1,e.z);
-   hands[e.hand]?.getWorldPosition(point);
-   shots.push({x:point.x,y:point.y,z:point.z,start:elapsed.value-dt,heading:e.heading,range:e.range});
+  clock.value=battle.time;elapsed.value+=dt;radius.value=FISTWIND_STATS.fieldRadius;
+  for(const event of events){
+   if(event.type==='windShot'){
+    point.set(event.x,1,event.z);hands[event.hand]?.getWorldPosition(point);
+    flights.push({x:point.x,y:point.y,z:point.z,heading:event.heading,range:event.range,start:elapsed.value-dt,duration:.22,launched:true});
+   }else if(event.type==='windReflect'){
+    flights.push({...event,range:.68,start:elapsed.value-dt,duration:.25});
+   }
   }
-  let alive=0;
-  for(const shot of shots)if(elapsed.value-shot.start<.18)shots[alive++]=shot;
-  shots.length=alive;
-  const {origin,flight}=instances.ensure(shots.length+hands.length);
+  let alive=0,launched=0;
+  for(const effect of flights)if(elapsed.value-effect.start<effect.duration){
+   flights[alive++]=effect;if(effect.launched)launched++;
+  }
+  flights.length=alive;
+  const {origin,flight}=instances.ensure(flights.length+3);
   let i=0;
-  if(active)for(const hand of hands){
-   if(!hand)continue;
-   hand.getWorldPosition(point);
-   origin.setXYZW(i++,point.x,point.y,point.z,-1);
+  if(active){
+   player.getWorldPosition(point);
+   for(let ribbon=0;ribbon<3;ribbon++){
+    if(ribbon>=Math.max(1,3-launched))break;
+    origin.setXYZW(i,point.x,point.y+lift,point.z,-1);
+    flight.setXYZ(i++,ribbon,0,0);
+   }
   }
-  for(const shot of shots){
-   origin.setXYZW(i,shot.x,shot.y,shot.z,shot.start);
-   flight.setXY(i++,shot.heading,shot.range);
+  for(const effect of flights){
+   origin.setXYZW(i,effect.x,effect.y,effect.z,effect.start);
+   flight.setXYZ(i++,effect.heading,effect.range,effect.duration);
   }
   instances.commit(i);
  }};

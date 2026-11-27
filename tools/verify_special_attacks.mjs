@@ -41,11 +41,11 @@ for(const start of [-3,0,1.5,3]) {
  close(dodgeEndHeading('DodgeRoll',direction,start),start);
 }
 close(airDriftDistance(0),.18);close(airDriftDistance(1.2),.264);close(airDriftDistance(2.8),.6);
-close(.78/AIR_SLAM.recoveryRate,.78);
+close(.78/new AirSlam(0).recoveryRate,.819);
 for(const height of [0,.13,.4,.8]) {
  const flight=new AirSlam(height);
  close(flight.sample(0).height,height);close(flight.sample(flight.charge).height,height+AIR_SLAM.lift);
- close(flight.fallStart,.5);close(flight.recoveryStart-flight.landTime,.2);
+ close(flight.fallStart,.525);close(flight.recoveryStart-flight.landTime,.21);
  let last=flight.sample(0);
  for(const t of [.1,.25,.4,.499999]) {
   const charge=flight.sample(t);

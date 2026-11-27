@@ -3,7 +3,7 @@ productName: 奶蛙
 asar: true
 electronDist: output/electron-runtime45
 directories:
-  output: release/0.3.2
+  output: release/0.4.0
 files:
   - dist/**/*
   - desktop/**/*
@@ -12,10 +12,7 @@ win:
   target:
     - target: nsis
       arch: [x64]
-    - target: zip
-      arch: [x64]
   signExecutable: false
-artifactName: Naiwa-${version}-Windows-${arch}.${ext}
 nsis:
   artifactName: Naiwa-${version}-Setup-${arch}.${ext}
   oneClick: false
@@ -24,4 +21,4 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: 奶蛙
-  uninstallDisplayName: 奶蛙 0.3.2
+  uninstallDisplayName: 奶蛙 0.4.0

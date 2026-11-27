@@ -11,7 +11,7 @@ for(let i=0;i<4;i++){
  const b=new Battle();b.enemy.z=originals[i]*1.1+ENEMY_STATS.radius;b.beginAttack(name);b.resolveAttack(stats.times.at(-1),neutral);assert(b.enemy.health<b.enemy.maxHealth,'Extended front range did not hit');
  b.spawnEnemy();b.enemy.z=stats.range+ENEMY_STATS.radius+.01;b.beginAttack(name);b.resolveAttack(stats.times.at(-1),neutral);assert.equal(b.enemy.health,b.enemy.maxHealth,'Attack extends beyond new boundary');
 }
-assert.equal(ATTACK_STATS.RunAttack.range,1.2);assert.equal(ATTACK_STATS.AirAttack.range,1.85);
+assert.equal(ATTACK_STATS.RunAttack.range,1.2);assert.equal(ATTACK_STATS.AirAttack.range,1.665);
 const report=[];
 for(const phase of [1,2])for(const [pattern,moves] of Object.entries(SAMURAI_MOVES))for(let index=0;index<moves.length;index++){
  const b=new Battle();b.reset('samurai');b.enemy.phase=phase;b.enemy.x=0;b.enemy.z=1.5;beginBossSequence(b,pattern);

@@ -1,5 +1,6 @@
 import {skipActorShadows} from './actor-shadows.js';
 import {groundedWeaponPose} from './grounded-weapon-pose.js';
+import {retreatHopPose} from './enemy-move.js';
 import {SAMURAI_IDLE_PREVIEW} from './model-preview.js';
 import * as THREE from 'three';
 import {loadModel} from './model-loading.js';
@@ -25,7 +26,7 @@ export function loadEnemyModels(){
  })).catch(error=>{loading=null;throw error;});
 }
 const clamp=x=>Math.max(0,Math.min(1,x));
-export function enemyAnimationSample(id,e,time){
+export function enemyAnimationSample(id,e,time,hop=retreatHopPose(e)){
  if(id==='samurai'&&SAMURAI_IDLE_PREVIEW)return {name:'Idle',phase:(time*.5)%1};
  if(id==='samurai'&&['thrown','down','rising'].includes(e.state))return {name:'Idle',phase:0};
  if(id==='mirrorGuard'&&['thrown','down','rising','dazed'].includes(e.state))return {name:'Idle',phase:0};
@@ -44,6 +45,7 @@ export function enemyAnimationSample(id,e,time){
    return {name:ENEMY_MODEL_PROFILES[id].motions[e.move.motion],phase:.7+.3*clamp((e.elapsed-hold)/Math.max(.01,duration))};
   }
   const name=ENEMY_MODEL_PROFILES[id].motions[e.move.motion]??'Idle';
+  if(hop)return {name,phase:hop.phase};
   const phase=e.state==='recover'&&e.linkRecovery&&e.move.linkWait===0?.7:e.state==='recover'?.7+.3*clamp(e.elapsed/Math.max(.01,Math.min(.5,e.recovery))):e.elapsed<=e.telegraph?(e.move.chainHold?.45:.45*clamp(e.elapsed/Math.max(.01,e.telegraph))):.45+.25*clamp((e.elapsed-e.telegraph)/Math.max(.01,e.swingDuration));
   return {name,phase};
  }
@@ -72,9 +74,9 @@ export function createRiggedEnemy(id){
   mixer.update(0);model.updateMatrixWorld(true);
  }
  return {root,mats,rigged:true,get ready(){attach();return Boolean(model);},get model(){return model;},get mixer(){return mixer;},
-  animate(e,time){
+  animate(e,time,_prep,_strike,_recover,hop){
    attach();if(!model)return;
-   const sample=enemyAnimationSample(id,e,time),action=actions.get(sample.name),delta=lastTime===null?0:Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
+   const sample=enemyAnimationSample(id,e,time,hop),action=actions.get(sample.name),delta=lastTime===null?0:Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
    if(previous!==action){
     if(previous)previous.fadeOut(.08);
     action.reset().setEffectiveWeight(1).setEffectiveTimeScale(0).play();

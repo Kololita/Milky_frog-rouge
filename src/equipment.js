@@ -1,10 +1,11 @@
+import {combineResistances,RESISTANCE_LABELS} from './combat-damage.js';
 import {nearestAssemblySnap} from './assembly-snap.js';
 import {pivotCells,equipmentAnchor} from './equipment-bends.js';
 import {renderEquipmentText} from './equipment-text.js';
-import {EQUIPMENT_PASSIVES,passiveLevels} from './equipment-passives.js';
+import {EMPTY_FORGE_PHYSICAL_PER_CELL,EQUIPMENT_PASSIVES,passiveLevels} from './equipment-passives.js';
 import {EQUIPMENT,RARITIES,STARTING_LOADOUT,STARTING_ITEMS} from './equipment-catalog.js';
 import {AssemblyLoadout,shapeCells,shapeSize,ASSEMBLY_BOARDS} from './assembly-board.js';
-import {resolveEquipment,rollEquipment,validEquipmentRoll,equipmentDescription,equipmentDisplayInteger} from './equipment-rolls.js';
+import {resolveEquipment,rollEquipment,validEquipmentRoll,equipmentDescription,formatEquipmentBonus} from './equipment-rolls.js';
 export {EQUIPMENT,RARITIES};
 export const EQUIPMENT_SLOTS={armor:'装甲',gloves:'拳套',charm:'护符',skill:'技能',ultimate:'大招'};
 export function equipmentIconUrl(icon){
@@ -19,26 +20,36 @@ export function normalizeEquipmentLoadout(loadout={}){
  return {ultimate:loadout.ultimate,emptyCells:loadout.emptyCells,upgrades:loadout.upgrades??{},...(installed.length?{installed}:{}),...(skill?{skill}:{}),...(Object.keys(rolls).length?{rolls}:{})};
 }
 export function equipmentBonuses(value={}){
- const loadout=normalizeEquipmentLoadout(value),bonus={health:0,attack:0,reduction:0,regen:0,pose:0,attackSpeed:0,energyGain:0,range:0,potionHeal:0};
+ const loadout=normalizeEquipmentLoadout(value),bonus={health:0,attack:0,regen:0,pose:0,attackSpeed:0,energyGain:0,range:0,potionHeal:0};
  const ids=loadout.installed??Object.entries(loadout).filter(([slot,id])=>EQUIPMENT.some(item=>item.id===id&&item.slot===slot)).map(([,id])=>id);
- let damageTaken=1,potionMultiplier=1;
+ let potionMultiplier=1;const resistanceSources=[];
  const empty=ids.includes("charm-empty-forge")?Math.max(0,loadout.emptyCells??0):0;
  bonus.health+=2*empty;bonus.attack+=.5*empty;
- for(const id of new Set(ids)){const item=resolveEquipment(id,loadout.rolls?.[id],loadout.upgrades?.[id]);if(item){damageTaken*=1-(item.reduction??0);potionMultiplier*=1+(item.potionHeal??0);for(const key of Object.keys(bonus))if(!['reduction','potionHeal'].includes(key))bonus[key]+=item[key]??0;}}
- bonus.reduction=Math.min(.75,1-damageTaken+.01*empty);bonus.potionHeal=potionMultiplier-1;return bonus;
+ if(empty)resistanceSources.push({normal:empty*EMPTY_FORGE_PHYSICAL_PER_CELL});
+ for(const id of new Set(ids)){
+  const item=resolveEquipment(id,loadout.rolls?.[id],loadout.upgrades?.[id]);
+  if(!item)continue;
+  if(item.physicalResistance)resistanceSources.push({normal:item.physicalResistance*100});
+  if(item.resistances)resistanceSources.push(item.resistances);
+  potionMultiplier*=1+(item.potionHeal??0);
+  for(const key of Object.keys(bonus))if(key!=='potionHeal')bonus[key]+=item[key]??0;
+ }
+ bonus.potionHeal=potionMultiplier-1;bonus.resistances=combineResistances(...resistanceSources);return bonus;
 }
 /** The same aggregate used by combat; show installed skill separately from passive stats. */
 export function equipmentEffectSummary(value={}){
  const loadout=normalizeEquipmentLoadout(value),bonus=equipmentBonuses(loadout),rows=[];
- const integer=equipmentDisplayInteger,signed=n=>`${n>=0?'+':''}${integer(n)}`;
- for(const [key,label,unit]of [['health','生命上限',''],['attack','攻击力',''],['pose','绷住上限',''],['regen','绷住恢复','/秒'],['reduction','伤害减免','%'],['attackSpeed','攻击速度','%'],['energyGain','能量获取','%'],['range','攻击距离','%'],['potionHeal','血瓶恢复量','%']]){
+ const emptyCells=loadout.emptyCells??0;
+ for(const [key,label,unit]of [['health','生命上限',''],['attack','攻击力',''],['pose','绷住上限',''],['regen','绷住恢复','/秒'],['attackSpeed','攻击速度','%'],['energyGain','能量获取','%'],['range','攻击距离','%'],['potionHeal','血瓶恢复量','%']]){
   const amount=bonus[key];if(Math.abs(amount)<1e-9)continue;
-  rows.push({key,label,value:['reduction','attackSpeed','energyGain','range','potionHeal'].includes(key)?`${integer(amount*100)}%`:`${signed(amount)}${unit}`,negative:amount<0});
+  rows.push({key,label,value:`${formatEquipmentBonus(unit==='%'?amount*100:amount)}${unit}`,negative:amount<0});
  }
+ for(const [type,amount] of Object.entries(bonus.resistances))if(amount!==0)
+  rows.push({key:type,label:RESISTANCE_LABELS[type],value:`${formatEquipmentBonus(amount)}%`,negative:amount<0});
  if(loadout.skill){const skill=resolveEquipment(loadout.skill,loadout.rolls?.[loadout.skill],loadout.upgrades?.[loadout.skill]);if(skill)rows.push({key:'skill',label:skill.name,value:equipmentDescription(skill)});}
  const ids=loadout.installed??Object.values(loadout).filter(id=>typeof id==='string');
- for(const [id,level]of Object.entries(passiveLevels(ids.map(id=>resolveEquipment(id,loadout.rolls?.[id],loadout.upgrades?.[id])).filter(Boolean)))){const passive=EQUIPMENT_PASSIVES[id];rows.push({key:`passive-${id}`,label:passive.name,value:`等级 ${level}/${passive.max}`,tooltip:id==='emptyForge'?`${passive.effect(level)}
-当前增幅：生命 +${2*(loadout.emptyCells??0)} / 免伤 +${loadout.emptyCells??0}% / 攻击力 +${.5*(loadout.emptyCells??0)}`:passive.effect(level)});}
+ for(const [id,level]of Object.entries(passiveLevels(ids.map(id=>resolveEquipment(id,loadout.rolls?.[id],loadout.upgrades?.[id])).filter(Boolean)))){const passive=EQUIPMENT_PASSIVES[id];rows.push({key:`passive-${id}`,icon:passive.icon,label:passive.name,value:`等级 ${level}/${passive.max}`,tooltip:id==='emptyForge'?`${passive.effect(level)}
+当前增幅：生命 ${formatEquipmentBonus(2*emptyCells)} / 物理抗性${formatEquipmentBonus(emptyCells*EMPTY_FORGE_PHYSICAL_PER_CELL)}% / 攻击力 ${formatEquipmentBonus(.5*emptyCells)}`:passive.effect(level)});}
  return rows;
 }
 export function createEquipmentMenu(doc,win,{equip=()=>{},onOpen=()=>{},onClose=()=>{},canOpen=()=>true}={}){
@@ -70,7 +81,7 @@ export function createEquipmentMenu(doc,win,{equip=()=>{},onOpen=()=>{},onClose=
  function shapePreview(item){const cells=shapeCells(item.shape),size=shapeSize(cells),mini=doc.createElement('span');mini.className='equipment-shape-preview';mini.style.gridTemplateColumns=`repeat(${size.width},9px)`;mini.style.gridTemplateRows=`repeat(${size.height},9px)`;for(const [x,y]of cells){const square=doc.createElement('i');markPivot(square,item,x,y);square.style.gridColumn=String(x+1);square.style.gridRow=String(y+1);mini.append(square);}return mini;}
  function render(){
   if(!dialog)return;
-  if(effects){effects.replaceChildren();const rows=equipmentEffectSummary(model.loadout);if(!rows.length){const empty=doc.createElement('div');empty.className='equipment-effects-empty';empty.textContent='无';effects.append(empty);}let passiveHeading=false;for(const row of rows){if(row.key.startsWith('passive-')&&!passiveHeading){const heading=doc.createElement('div');heading.className='equipment-passives-heading';heading.textContent='附加被动';effects.append(heading);passiveHeading=true;}const line=doc.createElement('div'),label=doc.createElement('dt'),value=doc.createElement('dd');if(row.tooltip){line.title=row.tooltip;line.setAttribute('tabindex','0');line.setAttribute('aria-label',`${row.label} ${row.value}：${row.tooltip}`);}line.dataset.effect=row.key;line.className=row.key==='skill'?'equipment-effect-skill':row.negative?'is-negative':'';renderEquipmentText(doc,label,row.label,{lines:false});renderEquipmentText(doc,value,row.value);line.append(label,value);effects.append(line);}}
+  if(effects){effects.replaceChildren();const rows=equipmentEffectSummary(model.loadout);if(!rows.length){const empty=doc.createElement('div');empty.className='equipment-effects-empty';empty.textContent='无';effects.append(empty);}let passiveHeading=false;for(const row of rows){if(row.key.startsWith('passive-')&&!passiveHeading){const heading=doc.createElement('div');heading.className='equipment-passives-heading';heading.textContent='附加被动';effects.append(heading);passiveHeading=true;}const line=doc.createElement('div'),label=doc.createElement('dt'),value=doc.createElement('dd');if(row.tooltip){line.title=row.tooltip;line.setAttribute('tabindex','0');line.setAttribute('aria-label',`${row.label} ${row.value}：${row.tooltip}`);}line.dataset.effect=row.key;line.className=row.key==='skill'?'equipment-effect-skill':row.negative?'is-negative':'';renderEquipmentText(doc,label,row.label,{lines:false});if(row.icon){const icon=doc.createElement("img");icon.className="equipment-effect-icon";icon.src=equipmentIconUrl(row.icon);icon.alt="";label.prepend(icon);}renderEquipmentText(doc,value,row.value);line.append(label,value);effects.append(line);}}
   slots.replaceChildren();const item=find(model.ultimate),wrap=doc.createElement('div'),title=doc.createElement('h3'),button=doc.createElement('button'),name=doc.createElement('p');title.textContent='大招';button.type='button';button.className='equipment-slot';button.disabled=Boolean(fixedUltimate);button.setAttribute('aria-label',fixedUltimate?'当前大招':'选择大招');if(item){button.setAttribute('data-rarity',item.rarity);button.append(image(item));}name.textContent=model.name();button.addEventListener('click',()=>choose('ultimate'));wrap.append(title,button,name);slots.append(wrap);
   const boardRows=model.mask().length,boardCols=model.mask()[0].length;
   if(board){board.style.gridTemplateColumns=`repeat(${boardCols},1fr)`;board.style.gridTemplateRows=`repeat(${boardRows},1fr)`;board.replaceChildren();for(let y=0;y<boardRows;y++)for(let x=0;x<boardCols;x++){const cell=doc.createElement('button');cell.type='button';cell.className='assembly-cell '+(model.mask()[y][x]==='#'?'is-open':'is-closed');cell.setAttribute('aria-label',`${x+1}列${y+1}行${model.mask()[y][x]==='#'?'开放':'未开放'}`);cell.dataset.x=String(x);cell.dataset.y=String(y);cell.addEventListener('click',()=>{if(suppressClick||!selected)return;const result=placeAt(selected,x,y);if(result.ok){selected=null;clearGhost();text('');commit();}else text(result.reason);});board.append(cell);}}

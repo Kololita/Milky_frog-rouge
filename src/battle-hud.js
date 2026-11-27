@@ -2,6 +2,7 @@ import {createGpuDamageLabel} from './gpu-damage-label.js';
 import {POTION_STATS,PLAYER_STATS,ENERGY_STATS,ENEMY_STATS,RAGE_STATS,energyDamageMultiplier} from './battle-values.js';
 import {Vector3} from 'three';
 import {createBuffStatus} from './buff-status.js';
+import {damageTypeLabel} from './combat-damage.js';
 const integer=value=>Math.floor((Number(value)||0)+1e-8);
 
 export function createBattleHUD(doc,scene=null) {
@@ -53,7 +54,7 @@ export function createBattleHUD(doc,scene=null) {
   },update(battle,events=[],locked=false) {
     buffs.update(battle);
     const p=battle.player,e=battle.enemy;
-    text(byId('potion-count'),`${Math.floor(p.potions)} / ${battle.potionCapacity}`);const potionButton=byId('potion-use');if(potionButton)potionButton.disabled=p.health<=0||p.health>=battle.maxHealth||p.potions<=0||Boolean(battle.backThrow||battle.breakLaugh);
+    text(byId('potion-count'),`${Math.floor(p.potions)} / ${battle.potionCapacity}`);const potionButton=byId('potion-use');if(potionButton)potionButton.disabled=p.health<=0||p.health>=battle.maxHealth||p.potions<=0||Boolean(battle.backThrow||battle.breakLaugh||battle.electricChain);
     if(battle.time<lastTime){clearHitNumbers();damageTotal=0;lastDamageAt=-Infinity;}
     if(battle.time-lastDamageAt>=3-1e-9){damageTotal=0;lastDamageAt=-Infinity;}
     lastTime=battle.time;
@@ -78,7 +79,11 @@ export function createBattleHUD(doc,scene=null) {
       }
     }
     if(damageNumber&&damageTotal<=0)damageNumber.hidden=true;
-    meter(hp,p.health,battle.maxHealth);if(hp){const total=Math.max(battle.maxHealth,p.health+(p.shield??0));style(hp,'--fill',`${100*p.health/total}%`);style(hp,'--shield-end',`${100*(p.health+(p.shield??0))/total}%`);}meter(guard,p.pose,battle.maxPose);
+    meter(hp,p.health,battle.maxHealth);
+    const shield=p.shield??0;
+    style(hp,'--shield-width',`${100*shield/battle.maxHealth}%`);
+    hp?.classList.toggle('has-shield',shield>0);
+    meter(guard,p.pose,battle.maxPose);
     text(hpText,`${integer(p.health)} / ${integer(battle.maxHealth)}`);
     text(guardText,`${Math.floor(p.pose)} / ${battle.maxPose}`);
     const raging=battle.isRaging(),rageLeft=Math.max(0,p.rageUntil-battle.time);
@@ -96,7 +101,11 @@ export function createBattleHUD(doc,scene=null) {
       const text={enemyHit:`${event.label}  −${integer(event.damage)}${event.dazed?` · 击退后晕眩${integer(event.dazeDuration)}秒`:''}`,blocked:`${event.label} · 防御 −${integer(event.guardSpent)}${event.damage?` · 生命 −${integer(event.damage)}`:''}${event.counterReady?' · 右手金光3秒 · 可推掌反击':''}`,guardBroken:`破防  −${integer(event.damage)}`,playerHit:`受到攻击  −${integer(event.damage)}`,enemyDefeated:`击败傀儡 · ${integer(ENEMY_STATS.respawn)} 秒后重生`,playerDefeated:`奶蛙倒下了 · ${integer(PLAYER_STATS.respawn)} 秒后重新开始`,enemyRespawned:'傀儡已重生',playerRespawned:'已恢复 · 再试一次'}[event.type];
       const energyMessage={energyAbsorbing:'吸收金光…',energyInterrupted:'吸收中断 · 金光消散',energyFull:'能量已满',energyGained:`能量 ${integer(event.energy)}/100 · 伤害 +${integer((event.bonus??0)*100)}%${event.healed?` · 生命 +${integer(event.healed)}`:''}`,rageStarted:'进怒 · 时间缓滞',rageEnded:'怒气结束 · 速度恢复'}[event.type];
       const statusMessage=event.status==='burn'?(event.type==='statusApplied'?'着火 · 前滚扑灭':event.type==='statusRemoved'?'火焰已扑灭':null):null;
-      if(text||energyMessage||statusMessage){message=text??energyMessage??statusMessage;messageUntil=battle.time+2.2;}
+      if(text||energyMessage||statusMessage){
+        message=text??energyMessage??statusMessage;
+        if(text&&event.delivery&&event.element&&panel?.classList.contains('detailed'))message+=` · ${damageTypeLabel(event)}`;
+        messageUntil=battle.time+2.2;
+      }
     }
     text(feed,message.replaceAll('防御','绷住').replaceAll('姿态','绷住'));
     const opacity=battle.time<messageUntil?'1':'0';

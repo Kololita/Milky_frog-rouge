@@ -40,7 +40,7 @@ for(const previous of [null,...elites]){
  saved.map.rows[next.layer].find(room=>room.id===next.id).encounter=first.encounter;
  assert.equal(RunProgress.restore(saved).selected.encounter,chosen);
 }
-assert.deepEqual(runClasses().map(item=>item.id),['rage','fistwind']);
+assert.deepEqual(runClasses().map(item=>item.profession),['金龙','木龙','水龙','火龙','土龙','风龙','雨龙','雷龙','电龙']);
 assert.equal(RUN_BOON_POOLS.length,3);
 const boonSeeds=new Map();
 for(let n=0;n<80;n++){
@@ -93,14 +93,194 @@ for(const item of runClasses())for(const boon of RUN_BOON_POOLS.flat()){
  assert.equal(battle.maxHealth,PLAYER_STATS.health+(boon.health??0));
  assert.equal(battle.player.health,battle.maxHealth);
  battle.player.energy=100;
- assert(battle.beginRage());
- assert(battle.takeEvents().some(event=>event.type===(item.id==='rage'?'rageStarted':'fistwindStarted')));
+ assert(battle.beginUltimate());
+ const ultimateEvent=item.id==='rage'?'rageStarted':item.id==='fistwind'?'fistwindStarted':'elementalUltimateStarted';
+ assert(battle.takeEvents().some(event=>event.type===ultimateEvent&&(ultimateEvent!=='elementalUltimateStarted'||event.id===item.id)));
  battle.reset('raider');
  assert.equal(battle.maxHealth,PLAYER_STATS.health+(boon.health??0));
  battle.reset('practice',{runHealthBonus:0});
  assert.equal(battle.maxHealth,PLAYER_STATS.health);
  menu.sandbox();
  assert(menu.selectUltimate(other.id));
+}
+
+{
+ const pose={x:0,z:0,height:0,heading:0};
+ const makeBattle=ultimate=>{
+  const battle=new Battle();
+  battle.applyEquipment({ultimate});
+  battle.enemy.z=100;
+  battle.enemy.act=()=>{};
+  battle.player.energy=100;
+  return battle;
+ };
+ const advance=(battle,seconds)=>{
+  for(let frame=0;frame<seconds*60;frame++)battle.update(1/60,pose);
+ };
+ const metal=makeBattle('metal');
+ metal.runGold=50;
+ const near=metal.enemy,edge=metal.createEnemy(near.encounter,1),far=metal.createEnemy(near.encounter,2);
+ for(const [enemy,x,z] of [[near,0,3],[edge,6,0],[far,6.01,0]]){
+  Object.assign(enemy,{x,z,health:1000,act(){}});
+ }
+ metal.enemies.push(edge,far);
+ assert(metal.beginUltimate());
+ assert(!metal.beginUltimate());
+ assert.deepEqual([near.health,edge.health,far.health],[950,950,1000]);
+ assert.equal(near.dazeUntil,4.5);
+ assert.equal(metal.runGold,50);
+ advance(metal,4.4);assert.equal(near.state,'dazed');
+ advance(metal,.1);assert.equal(near.state,'idle');
+ const wood=makeBattle('wood');
+ const target=wood.createEnemy(wood.enemy.encounter,1);
+ Object.assign(wood.enemy,{x:0,z:3,health:1000});
+ Object.assign(target,{x:2,z:3,health:1000,state:'windup',move:{dealsDamage:true},
+  act(){this.x+=1;}});
+ wood.enemies.push(target);
+ wood.player.health=30;
+ assert(wood.beginUltimate(pose,target));
+ advance(wood,1);
+ assert.equal(target.health,995);assert.equal(wood.enemy.health,1000);
+ assert.equal(target.x,2);assert(Math.abs(target.elapsed-.7)<1e-8);
+ advance(wood,9);
+ assert.equal(target.health,950);assert.equal(wood.player.health,80);
+ assert.equal(wood.activeElementalUltimate(),null);
+ advance(wood,1/60);assert(Math.abs(target.x-3)<1e-8);
+ const water=makeBattle('water');
+ water.player.pose=1;
+ const fire={fire:true,motionMultiplier:1,poseDamage:3,impactLevel:0,reach:1,halfAngle:Math.PI,heightMin:0,heightMax:1};
+ const origin={x:0,z:.5,height:0,heading:Math.PI,attackPower:10};
+ const burn={type:'burn',amount:3,duration:4,tickInterval:.5};
+ water.applyPlayerStatus(burn);
+ assert(water.beginUltimate());
+ assert(!water.player.effects.has('burn'));assert.equal(water.player.shield,0);
+ advance(water,3);
+ assert.equal(water.player.shield,18);assert.equal(water.player.pose,19);
+ water.strikePlayer(pose,fire,0,origin);assert.equal(water.player.shield,18);
+ water.strikePlayer(pose,{...fire,fire:false},0,origin);assert.equal(water.player.shield,8);
+ advance(water,17);assert.equal(water.player.shield,110);
+ water.clearBattleEffects();
+ assert.equal(water.activeElementalUltimate(),null);
+ assert.equal(water.player.shield,0);
+ const earth=makeBattle('earth');
+ assert(earth.beginUltimate());
+ earth.strikePlayer(pose,{...fire,fire:false},0,origin);
+ assert.equal(earth.player.health,earth.maxHealth);assert.equal(earth.player.pose,earth.maxPose);
+ const ball=earth.earthRoll,position={x:0,z:0};
+ Object.assign(earth.enemy,{x:ball.stats.radius+earth.enemy.radius,z:0,health:1000});
+ ball.stats.drag=0;ball.vx=3;ball.vz=1;
+ earth.moveEarthRoll(position,null,.05);
+ assert(Math.abs(ball.vx+6)<1e-7);
+ assert(Math.abs(ball.vz-1)<1e-7);
+ assert.equal(earth.enemy.health,980);
+ assert(position.x<0&&position.z>0);
+ earth.moveEarthRoll(position,null,.05);assert.equal(earth.enemy.health,980);
+ advance(earth,19.9);
+ assert(earth.earthRoll);assert(!earth.earthExit);
+ advance(earth,.1);
+ assert.equal(earth.earthRoll,null);
+ assert(earth.earthExit);
+ assert(earth.takeEvents().some(event=>event.type==='earthRollEnded'));
+ earth.strikePlayer(pose,{...fire,fire:false},0,origin);
+ assert.equal(earth.player.health,earth.maxHealth-10);
+
+ const distanceBattle=makeBattle('earth'),path={x:0,z:0};
+ assert(distanceBattle.beginUltimate(pose));
+ const distanceRoll=distanceBattle.earthRoll;
+ distanceRoll.stats.drag=0;distanceRoll.vx=2;
+ const enemy=distanceBattle.enemy,clearance=distanceRoll.stats.radius+enemy.radius;
+ Object.assign(enemy,{x:clearance+3,z:0,health:1000});
+ const rollFrames=frames=>{
+  for(let i=0;i<frames;i++)distanceBattle.moveEarthRoll(path,null,.05);
+ };
+ rollFrames(31);assert.equal(enemy.health,971,'The first hit includes the three metres since activation');
+ enemy.x=1-clearance;
+ rollFrames(8);assert.equal(enemy.health,945,'The second hit counts only the distance after the first bounce');
+ distanceBattle.sceneryColliders.push({x:2+clearance,z:0,health:1,radius:enemy.radius});
+ enemy.x=-clearance;
+ rollFrames(10);assert.equal(enemy.health,919,'A scenery bounce resets the travelled distance');
+
+ const slow=makeBattle('earth'),contact={x:0,z:0};
+ Object.assign(slow.enemy,{x:clearance,z:0,health:1000});
+ assert(slow.beginUltimate(pose));
+ const slowRoll=slow.earthRoll;
+ slowRoll.vx=.1;
+ const towardEnemy={x:1,z:0};
+ for(let i=0;i<15;i++)slow.moveEarthRoll(contact,towardEnemy,1/60);
+ assert.equal(slow.enemy.health,980,'Holding into the same enemy after a slow bump must not instantly hit again');
+ assert(contact.x<-.2,'Even a slow bump separates the ball from the enemy');
+
+ const rain=makeBattle('rain');
+ Object.assign(rain.enemy,{x:0,z:4,health:1000,act(_battle,dt){this.x+=dt;}});
+ rain.applyPlayerStatus(burn);
+ assert(rain.beginUltimate(pose));
+ assert(!rain.player.effects.has('burn'));
+ rain.enemy.activeAura={hit:{element:'fire'},innerRadius:1,outerRadius:2,cooldown:30};
+ advance(rain,1);
+ assert(!rain.enemy.activeAura);
+ assert(Math.abs(rain.enemy.x-.7)<1e-8);
+ assert.equal(rain.enemy.health,985);
+ const impact={label:'test',origin:pose,impactLevel:0};
+ assert.equal(rain.damageEnemy(rain.enemy,10,{...impact,element:'fire'}),7);
+ assert.equal(rain.damageEnemy(rain.enemy,10,{...impact,element:'electric'}),12);
+ assert.equal(rain.damageEnemy(rain.enemy,10,impact),10);
+ Object.assign(rain.enemy,{x:0,z:1.5});
+ const wave=rain.launchWave(pose);
+ rain.updateWaves(.25);
+ assert.equal(wave.element,'electric');
+ assert(rain.takeEvents().some(event=>event.type==='enemyHit'&&event.label==='气功冲击波'&&event.element==='electric'&&event.damage===43.2));
+ const health=rain.player.health;
+ rain.strikePlayer(pose,{...fire,statusOnHit:burn},0,origin);
+ assert.equal(rain.player.health,health-7);
+ assert(!rain.player.effects.has('burn'));
+ rain.player.invulnerableUntil=0;
+ rain.strikePlayer(pose,{...fire,element:'electric'},0,origin);
+ assert.equal(rain.player.health,health-19);
+ const outside={...pose,x:10},outsideOrigin={...origin,x:10};
+ rain.player.invulnerableUntil=0;
+ rain.strikePlayer(outside,fire,0,outsideOrigin);
+ assert.equal(rain.player.health,health-29);
+ rain.enemy.x=10;assert.equal(rain.damageEnemy(rain.enemy,10,{...impact,element:'electric'}),10);
+
+ const thunder=makeBattle('thunder'),marked=thunder.createEnemy(thunder.enemy.encounter,1);
+ Object.assign(thunder.enemy,{x:0,z:2,health:1000});
+ Object.assign(marked,{x:0,z:4,health:1000,state:'windup',move:{dealsDamage:true},act(){}});
+ thunder.enemies.push(marked);
+ assert(thunder.beginUltimate(pose,marked));
+ advance(thunder,.9);assert.equal(marked.health,1000);
+ advance(thunder,.1);assert.equal(marked.health,970);assert.equal(marked.state,'dazed');assert.equal(marked.move,null);
+ assert(Math.abs(marked.dazeUntil-thunder.enemyTime-1)<1e-8);
+ advance(thunder,2.9);assert.equal(marked.health,970);
+ advance(thunder,.1);assert.equal(marked.health,930);
+ advance(thunder,2.9);assert.equal(marked.health,930);
+ advance(thunder,.1);assert.equal(marked.health,880);assert.equal(thunder.enemy.health,1000);
+ assert.equal(thunder.takeEvents().filter(event=>event.type==='elementalLightning').length,3);
+
+ const electric=makeBattle('electric');
+ const chain=[electric.enemy,...[1,2,3].map(id=>electric.createEnemy(electric.enemy.encounter,id))];
+ chain.forEach((enemy,i)=>Object.assign(enemy,{x:[4.7,8.8,13.8,19][i],z:0,health:1000,act(){}}));
+ electric.enemies=chain;
+ electric.player.energy=1;
+ assert(electric.beginUltimate(pose));
+ for(let i=0;i<6;i++)electric.update(1/60,{...pose,lockedTarget:chain[1]});
+ assert.equal(electric.player.energy,1,'An out-of-range lock cannot silently retarget');
+ advance(electric,.1);
+ assert.equal(electric.player.energy,0);
+ assert.deepEqual(chain.map(enemy=>enemy.health),[998.5,998.87,999.16,1000]);
+ assert.equal(electric.takeEvents().filter(event=>event.type==='enemyHit'&&event.element==='electric').length,3);
+ assert.equal(electric.electricChain,null);
+ assert(!electric.beginUltimate(pose));
+ electric.player.energy=4;
+ assert(electric.beginUltimate(pose));
+ advance(electric,.1);
+ const linked=chain[2],x=linked.x;
+ linked.act=(_battle,dt)=>{linked.x+=dt;};
+ assert.equal(electric.enemyMovementRate(chain[0]),.4);
+ assert.equal(electric.enemyMovementRate(chain[2]),.4);
+ assert.equal(electric.enemyMovementRate(chain[3]),1);
+ advance(electric,1/60);
+ assert(Math.abs(linked.x-x-.4/60)<1e-8);
+ assert(electric.beginUltimate(pose));assert.equal(electric.enemyMovementRate(linked),1);
 }
 
 {
@@ -141,36 +321,54 @@ assert.equal(RunProgress.restore(legacy.snapshot()).status,'victory');
 function element(){
  return {children:[],attributes:{},listeners:{},open:false,disabled:false,
   append(...children){this.children.push(...children);},
-  replaceChildren(){this.children=[];},setAttribute(name,value){this.attributes[name]=value;},
+  replaceChildren(){this.children=[];},setAttribute(name,value){this.attributes[name]=value;},removeAttribute(name){delete this.attributes[name];},
   addEventListener(name,handler){this.listeners[name]=handler;},
   showModal(){this.open=true;},close(){this.open=false;},focus(){},
   click(){if(!this.disabled)this.listeners.click?.();},
  };
 }
-const ids=['class-screen','boon-screen','class-roster','class-scroll','class-next','class-back','boon-options','boon-back','boon-confirm'];
+const ids=['class-screen','boon-screen','class-roster','class-scroll','class-detail','class-back','boon-options','boon-back','boon-confirm','class-detail-title','class-ultimate-name','class-ultimate-description','class-element','class-detail-portrait','class-stat-list','class-detail-close','class-detail-confirm','class-ultimate-icon'];
 const elements=Object.fromEntries(ids.map(name=>[`run-${name}`,element()]));
 const starts=[];let exits=0;
 const ui=createRunStartUI({getElementById:id=>elements[id],createElement:element},{
  start:(...args)=>starts.push(args),back:()=>exits++,
 });
-const [classes,boonScreen,roster,slider,next,classBack,boonOptions,boonBack,confirm]=Object.values(elements);
+const [classes,boonScreen,roster,slider,detail,classBack,boonOptions,boonBack,confirm,title,,description,elementLabel,detailPortrait,statList,closeDetail,confirmClass,ultimateIcon]=Object.values(elements);
 Object.assign(roster,{scrollWidth:900,clientWidth:500});
 for(const mapSeed of [undefined,seed]){
  ui.open(mapSeed);
- assert(!classes.hidden&&boonScreen.hidden&&next.disabled);
+ assert(!classes.hidden&&boonScreen.hidden&&!detail.open);
+ for(const card of roster.children){
+  const summary=card.children[2].textContent.split('：')[1];
+  assert(summary&&[...summary].length<=30&&!/\p{Number}/u.test(summary),card.children[0].textContent);
+ }
  assert.equal(slider.max,'400');assert(!slider.disabled);
  slider.value='240';slider.listeners.input();assert.equal(roster.scrollLeft,240);
- const portrait=roster.children[1].children[1];
- assert.equal(roster.children[1].children[0].textContent,'御风拳师');
- assert.match(roster.children[1].children[2].textContent,/^专属技能【拳风】：/);
+ roster.children[3].children[1].click();
+ assert.equal(ultimateIcon.src,'/images/equipment/rage.png');
+ assert.equal(elementLabel.textContent,'人物属性：火');
+ closeDetail.click();
+ const wind=roster.children[5],portrait=wind.children[1];
+ assert.equal(wind.children[0].textContent,'风龙');
+ assert.match(wind.children[2].textContent,/^专属技能【拳风】：/);
  assert.equal(portrait.children[0].src,'/images/run-start/fistwind.png');
- portrait.click();next.click();
+ portrait.click();
+ assert(detail.open&&!classes.hidden&&boonScreen.hidden);
+ assert.equal(title.textContent,'风龙');
+ assert.equal(ultimateIcon.src,'/images/equipment/illustrated/fistwind.png');
+ assert.equal(detailPortrait.src,'/images/run-start/fistwind.png');
+ assert.match(description.textContent,/30秒/);
+ assert.equal(elementLabel.textContent,'人物属性：普通');
+ assert.equal(statList.children.length,8);
+ assert.equal(statList.children.at(-1).children[1].children[1].textContent,'20%');
+ closeDetail.click();assert(!detail.open&&!classes.hidden&&boonScreen.hidden);
+ portrait.click();confirmClass.click();
  assert(classes.hidden&&!boonScreen.hidden);
  assert.equal(boonOptions.children.length,3);
  assert(confirm.disabled);
  boonBack.click();assert(!classes.hidden&&boonScreen.hidden);
- assert.equal(portrait.attributes['aria-pressed'],'true');
- next.click();boonOptions.children[2].click();confirm.click();confirm.click();
+ assert(!detail.open);
+ portrait.click();confirmClass.click();boonOptions.children[2].click();confirm.click();confirm.click();
  assert(classes.hidden&&boonScreen.hidden);
  const [actualSeed,setup]=starts.at(-1);
  assert.match(actualSeed,/^\d{9}$/);

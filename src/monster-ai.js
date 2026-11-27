@@ -1,6 +1,7 @@
 import {MOB_RULES,MOB_AI_DEFAULTS} from './monster-rules.js';
 import {steerEnemy} from './enemy-steering.js';
 import {PLAYER_STATS} from './battle-values.js';
+import {retreatFlightProgress} from './enemy-move.js';
 import {launchEnemyProjectiles} from './enemy-projectiles.js';
 import {moveActorMotion} from './actor-collision.js';
 import {ATTACK_PREVIEW_LEAD,recoveryStrikeTime} from './attack-warning.js';
@@ -20,7 +21,7 @@ function beginMove(battle,index,repeated=false){
  if(move.requiresMeleeBeat)e.hasMeleeBeat=false;
  if(move.kind==='aura')e.auraCasting=move;
  e.moveIndex=index;e.move=move;
- e.recoveryStrikeResolved=false;e.repeatQueued=null;e.repeatRemaining=!repeated&&e.move.repeatBelowRatio&&e.health<=battle.enemyStats.health*e.move.repeatBelowRatio?1:0;
+ e.recoveryStrikeResolved=false;e.repeatQueued=null;e.repeatRemaining=!repeated&&e.move.repeatBelowRatio&&e.health<=e.maxHealth*e.move.repeatBelowRatio?1:0;
  e.swingDuration=move.swing;
  const contactOffset=move.kind==='channel'?0:e.swingDuration*MOB_RULES.hitProgress;
  const needsWarning=!move.skipWarning&&(move.dealsDamage||move.kind==='aura');
@@ -36,7 +37,7 @@ function selectMove(battle,distance){
  const e=battle.enemy,stats=battle.enemyStats,policy=stats.ai??MOB_AI_DEFAULTS;
  const value=x=>typeof x==='string'?x.split('.').reduce((o,k)=>o?.[k],stats):x;
  const inReach=distance<=stats.stopDistance+MOB_RULES.approachTolerance||
-  (battle.canEnemyChase?.(e)===false&&stats.moves.some((move,index)=>move.kind==='melee'&&moveAvailable(battle,index,distance)));
+  (battle.isGroupAggressor?.(e)===false&&stats.moves.some((move,index)=>move.kind==='melee'&&moveAvailable(battle,index,distance)));
  for(const rule of policy.rules??[]){
   if(!inReach&&!policy.startAnywhere&&!rule.atDistance)continue;
   if(rule.min!=null&&(rule.inclusive?distance<value(rule.min):distance<=value(rule.min)))continue;
@@ -61,7 +62,7 @@ function selectMove(battle,distance){
 function adjustSpacing(battle,pose,dt,target=battle.enemy.stats.ai?.preferredDistance){
  const e=battle.enemy;if(target==null)return false;
  const dx=pose.x-e.x,dz=pose.z-e.z,d=Math.hypot(dx,dz),error=d-target;if(d<1e-6||Math.abs(error)<Math.min(.08,MOB_RULES.approachTolerance))return true;
- if(error>0&&battle.canEnemyChase?.(e)===false)return false;
+ if(error>0&&battle.canEnemyChase?.(e,d)===false)return false;
  const step=Math.sign(error)*Math.min(Math.abs(error),e.stats.speed*dt),result=moveActorMotion(e,{x:e.x+dx/d*step,z:e.z+dz/d*step},[{...pose,radius:PLAYER_STATS.radius,health:1},...battle.enemies.filter(a=>a!==e)],e.radius);
  e.moving=Math.hypot(result.x-e.x,result.z-e.z)>1e-6;e.x=result.x;e.z=result.z;return true;
 }
@@ -79,12 +80,14 @@ export function updateMonster(battle,dt,pose){
   return;
  }
  if(e.state==='windup'){
+  const moveRate=battle.enemyMovementRate?.(e)??1;
   const trackingEnd=Math.max(0,e.telegraph-e.move.lockLead),trackDt=Math.max(0,Math.min(dt,trackingEnd-(e.elapsed-dt)));
   const shot=e.move.projectile,lead=shot?Math.min(MOB_RULES.maxPrediction,shot.lead+Math.hypot(pose.x-e.x,pose.z-e.z)/shot.speed):0;
   const aim={x:pose.x+e.playerVelocity.x*lead,z:pose.z+e.playerVelocity.z*lead};
   if(e.move.kind==='parry'||e.move.aimThroughout)steerEnemy(e,pose,dt,e.move.trackingTurnRate??e.windupTurnRate);else if(trackDt)steerEnemy(e,aim,trackDt,e.windupTurnRate);else e.turnVelocity=0;
   if(e.move.retreat){
-   const travel=e.move.retreat*smooth(e.elapsed/Math.max(e.telegraph,e.swingDuration)),step=Math.max(0,travel-e.retreatDone);
+   const progress=e.move.retreatHop?retreatFlightProgress(e):e.elapsed/Math.max(e.telegraph,e.swingDuration);
+   const travel=e.move.retreat*smooth(progress),step=Math.max(0,travel-e.retreatDone)*moveRate;
    const target={x:e.x-Math.sin(e.retreatHeading)*step,z:e.z-Math.cos(e.retreatHeading)*step};
    const result=moveActorMotion(e,target,[{...pose,radius:PLAYER_STATS.radius,health:1},...battle.enemies.filter(other=>other!==e)],e.radius);
    e.x=result.x;e.z=result.z;e.retreatDone=travel;e.moving=step>0;
@@ -92,7 +95,7 @@ export function updateMonster(battle,dt,pose){
   e.superArmor=e.move.startupResilience>=3;
   const travel=e.move.lunge*smooth((e.elapsed-e.telegraph)/Math.max(.001,e.swingDuration)),fx=Math.sin(e.heading),fz=Math.cos(e.heading);
   const dx=pose.x-e.x,dz=pose.z-e.z,along=dx*fx+dz*fz,side=dx*fz-dz*fx,clearance=e.radius+PLAYER_STATS.radius;
-  let step=Math.max(0,travel-e.lungeDone);
+  let step=Math.max(0,travel-e.lungeDone)*moveRate;
   if(along>0&&Math.abs(side)<clearance)step=Math.min(step,Math.max(0,along-Math.sqrt(clearance*clearance-side*side)));
   e.x+=fx*step;e.z+=fz*step;e.lungeDone=travel;
   if(e.move.kind==='channel'&&e.elapsed>=e.nextChannelHit-1e-9&&e.elapsed<e.windup-1e-9){
@@ -119,7 +122,7 @@ export function updateMonster(battle,dt,pose){
   if(e.elapsed>=e.windup-1e-9){
    e.state='recover';e.elapsed=0;e.superArmor=false;
    e.linkRecovery=Number.isFinite(e.move.link)&&e.moveIndex+1<stats.moves.length;
-   e.recovery=e.linkRecovery?e.move.link*(e.health<=stats.health*(stats.lowHealthThreshold??0)?stats.lowHealthLinkScale??1:1):e.move.recovery;
+   e.recovery=e.linkRecovery?e.move.link*(e.health<=e.maxHealth*(stats.lowHealthThreshold??0)?stats.lowHealthLinkScale??1:1):e.move.recovery;
    if(e.comboQueue?.length)e.recovery=e.move.comboRecovery??Math.min(.25,e.move.recovery);
    if(e.repeatRemaining){e.repeatRemaining=0;e.repeatQueued=e.moveIndex;e.recovery=e.move.repeatGap;}
    if(e.move.recoveryStrike)e.recovery=Math.max(e.recovery,recoveryStrikeTime(e.move.recoveryStrike));
@@ -141,7 +144,7 @@ export function updateMonster(battle,dt,pose){
   if(e.move?.recoveryMovement&&e.elapsed>e.recovery*e.move.recoveryMovement.start&&e.elapsed<e.recovery){
    const dx=pose.x-e.x,dz=pose.z-e.z,d=Math.hypot(dx,dz);
    if(d>1e-5){
-    steerEnemy(e,pose,dt);const radial=d>stats.stopDistance&&battle.canEnemyChase?.(e)!==false?e.move.recoveryMovement.forward:0,side=(e.id%2?1:-1)*e.move.recoveryMovement.side;
+    steerEnemy(e,pose,dt);const radial=d>stats.stopDistance&&battle.canEnemyChase?.(e,d)!==false?e.move.recoveryMovement.forward:0,side=(e.id%2?1:-1)*e.move.recoveryMovement.side;
     const result=moveActorMotion(e,{x:e.x+(dx/d*radial-dz/d*side)*dt,z:e.z+(dz/d*radial+dx/d*side)*dt},[{...pose,radius:PLAYER_STATS.radius,health:1},...battle.enemies.filter(other=>other!==e)],e.radius);
     e.x=result.x;e.z=result.z;e.moving=true;
    }
@@ -156,7 +159,7 @@ export function updateMonster(battle,dt,pose){
  }
  const dx=pose.x-e.x,dz=pose.z-e.z,distance=Math.hypot(dx,dz);steerEnemy(e,pose,dt);
  if(distance>stats.noticeRange)return;
- const canChase=battle.canEnemyChase?.(e)!==false;
+ const canChase=battle.canEnemyChase?.(e,distance)!==false;
  if(e.plannedMove&&!moveAvailable(battle,e.plannedMove.index,distance))e.plannedMove=null;
  if(stats.ai?.preferredDistance!=null&&!e.plannedMove)e.plannedMove=selectMove(battle,distance);
  const preferredDistance=e.plannedMove?stats.moves[e.plannedMove.index].preferredDistance??stats.ai?.preferredDistance:stats.ai?.preferredDistance;

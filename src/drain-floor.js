@@ -5,13 +5,6 @@ export function drainHeight(x,z){return Math.hypot(x,z)>10.75||Math.min(Math.abs
 export function createDrainFloor(root){
  const floor=foundryFloor();const side=new T.MeshStandardMaterial({color:'#303939',roughness:.5,metalness:.5});
  const baseMaterial=new T.MeshStandardMaterial({color:'#101719',roughness:.95,metalness:.05});baseMaterial.userData.reflectionIntensity=.04;side.userData.reflectionIntensity=.2;const base=new T.Mesh(new T.CylinderGeometry(11.4,11.4,.08,128),baseMaterial);base.position.y=-.29;base.receiveShadow=true;root.add(base);
- // Fin-lined channel walls reveal real depth and lead the water toward the edge.
- const finGeometry=new T.BoxGeometry(.025,.18,.035),matrices=[],dummy=new T.Object3D();
- for(const axis of [0,1])for(let grid=-8;grid<=8;grid+=4)for(let along=-11;along<=11;along+=.22)for(const sign of [-1,1]){
-  const x=axis?grid+sign*.13:along,z=axis?along:grid+sign*.13;if(Math.hypot(x,z)>11.25)continue;
-  dummy.position.set(x,-.12,z);dummy.rotation.y=axis?Math.PI/2:0;dummy.updateMatrix();matrices.push(dummy.matrix.clone());
- }
- const fins=new T.InstancedMesh(finGeometry,side,matrices.length);matrices.forEach((m,i)=>fins.setMatrixAt(i,m));fins.receiveShadow=true;root.add(fins);
  const outerWalk=new T.Shape();outerWalk.absarc(0,0,11.4,0,Math.PI*2,false);const hole=new T.Path();hole.absarc(0,0,11.25,0,Math.PI*2,true);outerWalk.holes.push(hole);const edgeWalk=new T.Mesh(new T.ExtrudeGeometry(outerWalk,{depth:.2,bevelEnabled:false,curveSegments:96}),side);edgeWalk.rotation.x=-Math.PI/2;edgeWalk.position.y=-.2;edgeWalk.receiveShadow=true;root.add(edgeWalk);
  for(const radius of [10.75,11.25]){const rail=new T.Mesh(new T.TorusGeometry(radius,.028,8,192),side);rail.rotation.x=Math.PI/2;rail.position.y=-.015;root.add(rail);}
  const circle=Array.from({length:128},(_,i)=>[10.75*Math.cos(i*Math.PI/64),10.75*Math.sin(i*Math.PI/64)]);

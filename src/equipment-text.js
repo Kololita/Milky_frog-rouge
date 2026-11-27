@@ -1,3 +1,4 @@
+import {DAMAGE_DELIVERY,DAMAGE_ELEMENTS,RESISTANCE_LABELS} from './combat-damage.js';
 import {EQUIPMENT_PASSIVES} from './equipment-passives.js';
 const TERMS={
  '攻击速度':'出招的快慢。',
@@ -7,8 +8,6 @@ const TERMS={
  '生命上限':'可拥有的最多生命值。',
  '绷住上限':'可承受的绷住损失，耗尽时会忍不住大笑。',
  '绷住恢复':'脱离攻击后，绷住条的恢复速度。',
- '伤害减免':'按比例减少受到的生命与护盾伤害。',
- '受到生命伤害':'受到敌人攻击时损失的生命。',
  '攻击距离':'攻击能够触及的距离。',
  '血瓶恢复量':'使用血瓶时的生命恢复量增幅。',
  '能量获取':'提升每次获得的能量。',
@@ -17,6 +16,8 @@ const TERMS={
  '霸体':'受到冲击时保持动作，仍会受到伤害。',
  '冲击力':'决定目标受到打断、坐倒或击飞的等级。',
 };
+for(const [key,element] of Object.entries(DAMAGE_ELEMENTS))TERMS[RESISTANCE_LABELS[key]]=`降低受到的${element}属性伤害。`;
+for(const type of Object.values(DAMAGE_DELIVERY))TERMS[type+'抗性']=`降低受到的${type}伤害。`;
 for(const passive of Object.values(EQUIPMENT_PASSIVES))TERMS[passive.name]=`每级：${passive.effect(1)}`;
 TERMS['集中']='缩短蓄力时间：1级10%，2级25%，3级40%。';
 const names=Object.keys(TERMS).sort((a,b)=>b.length-a.length);

@@ -2,29 +2,35 @@ import {tunable} from './tuning-registry.js';
 import {CHARACTER_HEIGHT} from './dodge.js';
 
 export const isAttack = name => /^Attack[1-4]$/.test(name) || name==='RunAttack' || name==='AirAttack'||name==='CounterWave';
-export const ATTACK_RATE=tunable('ATTACK_RATE',{CounterWave:1.45,Attack1:1.35,Attack2:1.45,Attack3:1.35,Attack4:1.45,RunAttack:1.4,runRecovery:.5,palmCharge:1,normalGap:.1});
+export const ATTACK_RATE=tunable('ATTACK_RATE',{Attack1:1.35,Attack2:1.45,Attack3:1.35,Attack4:1.45,RunAttack:1.4,runRecovery:.5,palmCharge:1,normalGap:.1});
+export const PALM_RELEASE_CLIP_TIME=.35;
+const palmTiming={rate:1.45,end:1.18,link:1.18};
+const palmPhases=[[0,PALM_RELEASE_CLIP_TIME,'interval'],[PALM_RELEASE_CLIP_TIME,.83,'attack'],[.83,palmTiming.end,'interval']];
 export const ATTACK_TIMING=Object.freeze({
-  CounterWave:{rate:1.45,end:1.18,link:1.18},
+  CounterWave:palmTiming,
   Attack1:{rate:1.35,end:.66,link:.40},
   Attack2:{rate:1.45,end:.87,link:.59},
   Attack3:{rate:1.35,end:.97,link:.78},
-  Attack4:{rate:1.45,end:1.18,link:1.18},
+  Attack4:palmTiming,
   RunAttack:{rate:1.4,end:.75,link:.50},
   AirAttack:{end:1.75,link:Infinity},
 });
 export const ATTACK_PHASES=Object.freeze({
-  CounterWave:[[0,.35,'interval'],[.35,.83,'attack'],[.83,1.18,'interval']],
+  CounterWave:palmPhases,
   Attack1:[[0,.36,'attack'],[.36,.66,'interval']],
   Attack2:[[0,.54,'attack'],[.54,.87,'interval']],
   Attack3:[[0,.73,'attack'],[.73,.97,'interval']],
-  Attack4:[[0,.35,'interval'],[.35,.83,'attack'],[.83,1.18,'interval']],
+  Attack4:palmPhases,
   RunAttack:[[0,.50,'attack'],[.50,.75,'interval']],
 });
+export function attackRecoveryGap(name){return /^Attack[1-4]$/.test(name)||name==='CounterWave'?ATTACK_RATE.normalGap:0;}
 export function attackPhase(name,time){return ATTACK_PHASES[name]?.find(phase=>time<phase[1]-1e-9)?.[2]??'interval';}
 export function attackRate(name,time,attackSpeed=1,intervalScale=1,chargeScale=1) {
   const phase=attackPhase(name,time);
-  const base=name==='RunAttack'&&phase==='interval'?ATTACK_RATE.runRecovery:['Attack4','CounterWave'].includes(name)&&time<.35?ATTACK_RATE.palmCharge:ATTACK_RATE[name]??1;
-  return base*(phase==='attack'?attackSpeed:1/Math.max(.01,intervalScale))/(['Attack4','CounterWave'].includes(name)&&time<.35?Math.max(.01,chargeScale):1);
+  const style=name==='CounterWave'?'Attack4':name;
+  const charging=style==='Attack4'&&time<PALM_RELEASE_CLIP_TIME;
+  const base=style==='RunAttack'&&phase==='interval'?ATTACK_RATE.runRecovery:charging?ATTACK_RATE.palmCharge:ATTACK_RATE[style]??1;
+  return base*(phase==='attack'?attackSpeed:1/Math.max(.01,intervalScale))/(charging?Math.max(.01,chargeScale):1);
 }
 export function advanceAttackTime(name,time,dt,attackSpeed=1,intervalScale=1,chargeScale=1){
   let left=dt,current=time;
@@ -75,7 +81,7 @@ export function jumpClearance(name,elapsed,duration) {
   const u=Math.max(0,Math.min(1,(elapsed-p.startup)/flight));
   return JUMP_TUNING.height*4*u*(1-u);
 }
-export const AIR_SLAM=tunable('AIR_SLAM',{charge:.5,lift:CHARACTER_HEIGHT*.5,impactHold:.2,recoveryRate:1,gravity:28,driftBase:.18,driftPerSpeed:.22,driftMax:.6});
+export const AIR_SLAM=tunable('AIR_SLAM',{durationScale:1.05,charge:.5,lift:CHARACTER_HEIGHT*.5,impactHold:.2,recoveryRate:1,gravity:28,driftBase:.18,driftPerSpeed:.22,driftMax:.6});
 export function airSlamRate(time,timeline,attackSpeed=1){return time<timeline.landTime-1e-9?attackSpeed:1;}
 export function airDriftDistance(speed) {
   return Math.min(AIR_SLAM.driftMax,Math.max(AIR_SLAM.driftBase,Math.abs(speed)*AIR_SLAM.driftPerSpeed));
@@ -85,11 +91,14 @@ export function airDriftDistance(speed) {
 export class AirSlam {
   constructor(height,chargeScale=1) {
     this.start=Math.max(0,height);this.lift=AIR_SLAM.lift;this.apex=this.start+this.lift;
-    this.charge=AIR_SLAM.charge*Math.max(.01,chargeScale);this.fall=Math.sqrt(2*this.apex/AIR_SLAM.gravity);
+    const durationScale=AIR_SLAM.durationScale;
+    this.charge=AIR_SLAM.charge*Math.max(.01,chargeScale)*durationScale;
+    this.fall=Math.sqrt(2*this.apex/AIR_SLAM.gravity)*durationScale;
     this.fallStart=this.charge;
     this.landTime=this.fallStart+this.fall;
-    this.recoveryStart=this.landTime+AIR_SLAM.impactHold;
-    this.duration=this.recoveryStart+1.25/AIR_SLAM.recoveryRate;
+    this.recoveryStart=this.landTime+AIR_SLAM.impactHold*durationScale;
+    this.recoveryRate=AIR_SLAM.recoveryRate/durationScale;
+    this.duration=this.recoveryStart+1.25/this.recoveryRate;
   }
   sample(elapsed) {
     const t=Math.max(0,elapsed);
@@ -104,7 +113,7 @@ export class AirSlam {
     if(t<this.recoveryStart) {
       return {height:0,drift:1,clipTime:.5,phase:'impact',landed:true,finished:false};
     }
-    const clipTime=Math.min(1.75,.5+(t-this.recoveryStart)*AIR_SLAM.recoveryRate);
+    const clipTime=Math.min(1.75,.5+(t-this.recoveryStart)*this.recoveryRate);
     const flip=Math.max(0,Math.min(1,(clipTime-.70)/.78));
     return {height:.42*Math.sin(Math.PI*flip),drift:1,clipTime,phase:flip>0&&flip<1?'backflip':'recover',landed:true,finished:t>=this.duration};
   }

@@ -4,6 +4,7 @@ import {resolveEquipment,validEquipmentRoll,nextEquipmentUpgrade} from './equipm
 import {shapeCells,shapeSize} from './equipment-shapes.js';
 
 export const BOARD_SIZE=6;
+export const ASSEMBLY_BOARD_REVISION=4;
 /** Each ultimate supplies explicit masks; future workbenches may be asymmetric or have holes. */
 export const ASSEMBLY_BOARDS=new Map();
 export function registerAssemblyBoard(id,definition){
@@ -13,10 +14,94 @@ export function registerAssemblyBoard(id,definition){
 }
 registerAssemblyBoard('rage',{levels:[
  ['......','.####.','.####.','.####.','.####.','......'],
- ['#####.','#####.','#####.','#####.','#####.','......'],
+ ['.###..','.####.','.####.','.####.','.####.','..###.'],
+ ['.###..','.#####','######','######','#####.','..###.'],
  ['######','######','######','######','######','######'],
 ]});
-registerAssemblyBoard('fistwind',{levels:[['........','........','..####..','..####..','..####..','..####..','........','........'],['........','...##...','.######.','..####..','..####..','.######.','...##...','........'],['...##...','..####..','.######.','########','..####..','.######.','..####..','...##...']]});
+registerAssemblyBoard('fistwind',{levels:[
+ ['........','........','..####..','..####..','..####..','..####..','........','........'],
+ ['........','...##...','..####..','.######.','..####..','..####..','...##...','........'],
+ ['........','...##...','.######.','########','..####..','.######.','...##...','........'],
+ ['...##...','..####..','.######.','########','..####..','.######.','..####..','...##...'],
+]});
+// Empty cells are dots. A digit is the first upgrade level that opens that cell.
+const elementalBoardLayouts={
+ metal:[
+  '..3333..',
+  '21000012',
+  '.000000.',
+  '..0000..',
+  '..1001..',
+  '..2112..',
+  '.332233.',
+  '........',
+ ],
+ wood:[
+  '...11...',
+  '..1001..',
+  '.200002.',
+  '31000013',
+  '32000023',
+  '...00...',
+  '.332233.',
+  '........',
+ ],
+ water:[
+  '.....13.',
+  '...3001.',
+  '..10002.',
+  '.2000023',
+  '.2000013',
+  '3100012.',
+  '..3233..',
+  '........',
+ ],
+ earth:[
+  '...33...',
+  '..1111..',
+  '..0000..',
+  '30000013',
+  '31000003',
+  '..2002..',
+  '..2222..',
+  '...33...',
+ ],
+ rain:[
+  '........',
+  '..0000..',
+  '.100001.',
+  '20000002',
+  '32100123',
+  '..3113..',
+  '...22...',
+  '..3333..',
+ ],
+ thunder:[
+  '....3113',
+  '...21003',
+  '.3100002',
+  '.2000013',
+  '320000..',
+  '31002...',
+  '.32.....',
+  '........',
+ ],
+ electric:[
+  '.33.....',
+  '3113....',
+  '100002..',
+  '2000003.',
+  '.3000002',
+  '..220021',
+  '....3113',
+  '........',
+ ],
+};
+for(const [id,layout] of Object.entries(elementalBoardLayouts)){
+ const levels=Array.from({length:4},(_,level)=>layout.map(row=>row.replace(/\d/g,cell=>Number(cell)<=level?'#':'.')));
+ registerAssemblyBoard(id,{levels});
+}
+const weatherBoardIds=new Set(['rain','thunder','electric']);
 const itemById=id=>EQUIPMENT.find(item=>item.id===id);
 const copy=value=>JSON.parse(JSON.stringify(value));
 export class AssemblyLoadout{
@@ -27,8 +112,25 @@ export class AssemblyLoadout{
   if(itemById(raw.ultimate)?.slot==='ultimate'&&ASSEMBLY_BOARDS.has(raw.ultimate)&&this.has(raw.ultimate))this.ultimate=raw.ultimate;
   for(const [id,value]of Object.entries(raw.boards??{})){
    if(!ASSEMBLY_BOARDS.has(id)||!value||typeof value!=='object')continue;
-   const level=Math.max(0,Math.min(ASSEMBLY_BOARDS.get(id).levels.length-1,Math.floor(Number(value.level)||0)));this.boards[id]={level,placements:[]};
-   for(const p of (Array.isArray(value.placements)?value.placements:[]))if(p&&!this.boards[id].placements.some(existing=>existing.id===p.id)&&this.check(p.id,p.x,p.y,p.rotation??0,id).ok)this.boards[id].placements.push({id:p.id,x:p.x,y:p.y,rotation:((p.rotation??0)%4+4)%4});
+   const oldLevel=Math.max(0,Math.floor(Number(value.level)||0));
+   const legacy=!raw.boardRevision&&['rage','fistwind'].includes(id)&&oldLevel>0;
+   const level=Math.min(ASSEMBLY_BOARDS.get(id).levels.length-1,oldLevel+(legacy?1:0));
+   const legacyElemental=Object.hasOwn(elementalBoardLayouts,id)&&(raw.boardRevision??0)<(weatherBoardIds.has(id)?4:3);
+   const centeredOffset=legacyElemental?1:0;
+   const changedMask=legacyElemental||(legacy&&oldLevel===1)||(raw.boardRevision===1&&id==='rage'&&level===2);
+   const board=this.boards[id]={level,placements:[]},relocate=[];
+   for(const p of (Array.isArray(value.placements)?value.placements:[])){
+    if(!p||board.placements.some(existing=>existing.id===p.id))continue;
+    const x=p.x+centeredOffset,y=p.y+centeredOffset;
+    if(this.check(p.id,x,y,p.rotation??0,id).ok){
+     board.placements.push({id:p.id,x,y,rotation:((p.rotation??0)%4+4)%4});
+    }else if(changedMask)relocate.push(p.id);
+   }
+   for(const item of new Set(relocate)){
+    if(board.placements.some(p=>p.id===item)||!this.item(item)?.shape||!this.has(item))continue;
+    const fit=this.firstFit(item,id);
+    if(fit)board.placements.push({id:item,...fit});
+   }
   }
   this.board();
  }
@@ -70,13 +172,17 @@ export class AssemblyLoadout{
  place(id,x,y,rotation=0){const result=this.check(id,x,y,rotation);if(!result.ok)return result;const b=this.board();b.placements=b.placements.filter(p=>p.id!==id);b.placements.push({id,x,y,rotation:((rotation%4)+4)%4});return result;}
  remove(id){const b=this.board(),before=b.placements.length;b.placements=b.placements.filter(p=>p.id!==id);return b.placements.length!==before;}
  clear(){this.board().placements=[];}
- firstFit(id){for(let rotation=0;rotation<4;rotation++)for(let y=0;y<this.mask().length;y++)for(let x=0;x<this.mask()[0].length;x++)if(this.check(id,x,y,rotation).ok)return {x,y,rotation};return null;}
+ firstFit(id,ultimate=this.ultimate){
+  const mask=this.mask(ultimate);
+  for(let rotation=0;rotation<4;rotation++)for(let y=0;y<mask.length;y++)for(let x=0;x<mask[0].length;x++)if(this.check(id,x,y,rotation,ultimate).ok)return {x,y,rotation};
+  return null;
+ }
  upgrade(id){if(!this.has(id)||itemById(id)?.slot!=='ultimate')return false;const definition=ASSEMBLY_BOARDS.get(id),board=this.board(id);if(!definition||board.level>=definition.levels.length-1)return false;board.level++;return true;}
  upgradeChoices(){return EQUIPMENT.filter(item=>item.slot==='ultimate'&&this.has(item.id)&&ASSEMBLY_BOARDS.has(item.id)).map(item=>({item,level:this.board(item.id).level,maxLevel:ASSEMBLY_BOARDS.get(item.id).levels.length-1,name:this.name(item.id)}));}
  get placements(){return copy(this.board().placements);}
  get loadout(){const ids=this.board().placements.map(p=>p.id),skill=ids.find(id=>itemById(id)?.slot==='skill');const open=this.mask().reduce((sum,row)=>sum+[...row].filter(cell=>cell==='#').length,0);
  const used=ids.reduce((sum,id)=>sum+shapeCells(this.item(id).shape).length,0);
  return {ultimate:this.ultimate,...(ids.includes("charm-empty-forge")?{emptyCells:Math.max(0,open-used)}:{}),...(Object.keys(this.upgrades).length?{upgrades:copy(this.upgrades)}:{}),...(ids.length?{installed:ids}:{}),...(skill?{skill}:{}),...(ids.some(id=>this.rolls[id])?{rolls:Object.fromEntries(ids.filter(id=>this.rolls[id]).map(id=>[id,{...this.rolls[id]}]))}:{})};}
- snapshot(){return copy({ultimate:this.ultimate,boards:this.boards,rolls:this.rolls,bends:this.bends,upgrades:this.upgrades});}
+ snapshot(){return copy({boardRevision:ASSEMBLY_BOARD_REVISION,ultimate:this.ultimate,boards:this.boards,rolls:this.rolls,bends:this.bends,upgrades:this.upgrades});}
 }
 export {shapeCells,shapeSize};

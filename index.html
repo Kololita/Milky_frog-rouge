@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#dce8e9" />
-    <title>奶蛙 · 0.3.2</title>
+    <title>奶蛙 · 0.4.0</title>
   </head>
   <body>
     <main id="app" class="on-home">
@@ -28,7 +28,7 @@
             <button id="home-arena" type="button">竞技场 <small>Boss挑战</small></button>
             <button id="home-settings" type="button">设置</button>
           </nav>
-          <div class="home-version"><b>0.3.2</b></div>
+          <div class="home-version"><b>0.4.0</b></div>
         </div>
       </section>
       <dialog id="new-game-dialog" class="home-game-dialog" aria-labelledby="new-game-title">
@@ -64,8 +64,27 @@
         <div id="run-class-roster" class="run-class-roster" aria-label="可选职业"></div>
         <footer class="run-class-footer">
           <input id="run-class-scroll" type="range" min="0" max="0" value="0" aria-label="横向滚动职业列表" disabled />
-          <button id="run-class-next" class="run-start-primary" type="button" disabled>下一步</button>
         </footer>
+        <dialog id="run-class-detail" aria-labelledby="run-class-detail-title">
+          <header class="class-detail-header">
+            <h2 id="run-class-detail-title"></h2>
+            <button id="run-class-detail-close" type="button" aria-label="返回职业列表">×</button>
+          </header>
+          <div class="class-detail-body">
+            <section class="class-detail-ultimate" aria-labelledby="run-class-ultimate-name">
+              <img id="run-class-ultimate-icon" alt="" decoding="async" />
+              <h3 id="run-class-ultimate-name"></h3>
+              <p id="run-class-ultimate-description"></p>
+              <p id="run-class-element"></p>
+            </section>
+            <img id="run-class-detail-portrait" alt="" />
+            <section class="class-detail-stats" aria-labelledby="run-class-stat-title">
+              <h3 id="run-class-stat-title">基础属性</h3>
+              <dl id="run-class-stat-list"></dl>
+            </section>
+          </div>
+          <footer><button id="run-class-detail-confirm" class="run-start-primary" type="button">确认职业</button></footer>
+        </dialog>
       </section>
       <section id="run-boon-screen" class="run-start-screen" aria-labelledby="run-boon-title" hidden>
         <header class="run-start-heading">
@@ -155,7 +174,7 @@
             </section>
           </fieldset>
         </form>
-        <div class="settings-bottom"><span>设置自动保存在本机 · v0.3.2</span><button id="return-home" type="button">保存并退出</button><button id="settings-reset" type="button">恢复默认</button></div>
+        <div class="settings-bottom"><span>设置自动保存在本机 · v0.4.0</span><button id="return-home" type="button">保存并退出</button><button id="settings-reset" type="button">恢复默认</button></div>
       </dialog>
       <section id="boss-hud" class="boss-hud" hidden aria-label="Boss战斗状态"><span id="boss-name"></span><div class="boss-health"><i id="boss-health-fill"></i></div></section>
       <img id="skill-activation-icon" class="skill-activation-icon" alt="" hidden>

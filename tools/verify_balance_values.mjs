@@ -9,7 +9,7 @@ const read=path=>fs.readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const doc=await read('docs/战斗数值.md');
 const multipliers={Attack1:1,Attack2:1.2,Attack3:.8,Attack4:4,CounterWave:4,RunAttack:1.2,AirAttack:3};
 const labels={Attack1:'左直拳',Attack2:'跨步右直拳',Attack3:'左右左三连拳',Attack4:'蓄力重推掌 / 金光反击近身推掌',RunAttack:'跑步双掌',AirAttack:'跳跃下砸'};
-assert.equal(PLAYER_STATS.attackPower,10);assert.equal(BACK_THROW.motionMultiplier,7.5);assert.equal(WAVE_STATS.motionMultiplier,3);
+assert.equal(PLAYER_STATS.attackPower,10);assert.equal(BACK_THROW.motionMultiplier,7.5);assert.equal(WAVE_STATS.motionMultiplier,3.6);
 for(const [name,value] of Object.entries(multipliers)){
  assert.equal(ATTACK_STATS[name].motionMultiplier,value,`Wrong player multiplier: ${name}`);
  if(labels[name]){const line=doc.split('\n').find(line=>line.startsWith(`| ${labels[name]} |`));assert(line);assert.equal(Number.parseFloat(line.split('|')[2]),value);}

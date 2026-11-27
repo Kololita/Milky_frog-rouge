@@ -28,7 +28,7 @@ for(const fps of [30,60,144]){
  while(mantis.enemy.state==='windup')step(mantis);
  assert.equal(mantis.enemy.recovery,.32*.75);
  const labels=[];for(let i=0;i<fps*8;i++){step(mantis);labels.push(...mantis.takeEvents().filter(e=>e.type==='monsterSwing').map(e=>e.label));}
- assert(labels.includes('双镰穿刺'));assert(!labels.includes('交镰飞扑'),'Pounce accidentally chained after third strike');
+ assert(labels.includes('雷镰贯刺'));assert(!labels.includes('引雷飞镰'),'Pounce accidentally chained after third strike');
  const far=new Battle();far.reset('scythemoth');far.enemy.z=5;step(far);assert.equal(far.enemy.move.motion,'pounce');
 }
 for(const stored of [null,{bindings:{KeyH:'KeyH',KeyR:'KeyR'}},{bindingRevision:2,bindings:{KeyH:'KeyR',KeyR:'KeyH'}}]){

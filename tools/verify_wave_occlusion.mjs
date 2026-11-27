@@ -13,19 +13,19 @@ for(const [name,frames] of Object.entries({DodgeSideL:14,DodgeSideR:14,DodgeRoll
 }
 for(const fps of [30,60,144]){
  const b=new Battle();b.enemy.z=1;b.enemy.superArmor=true;b.beginAttack('CounterWave');b.resolveAttack(.54,neutral);
- assert.equal(b.enemy.health,b.enemy.maxHealth-40);assert.equal(b.waves.length,1);assert.equal(b.waves[0].damage,30);
+ assert.equal(b.enemy.health,b.enemy.maxHealth-40);assert.equal(b.waves.length,1);assert.equal(b.waves[0].damage,36);
  for(let i=0;i<fps;i++)b.update(1/fps,neutral);
- assert.equal(b.enemy.health,b.enemy.maxHealth-70,'Palm and wave do not deal independent damage');assert.equal(b.waves.length,0);
+ assert.equal(b.enemy.health,b.enemy.maxHealth-76,'Palm and wave do not deal independent damage');assert.equal(b.waves.length,0);
  const pass=new Battle();const targets=[2,4].map((z,index)=>Object.assign(pass.createEnemy(pass.encounter,index),{z,superArmor:true}));pass.launchWave(neutral);
  for(let i=0;i<fps;i++){pass.time+=1/fps;pass.updateWaves(1/fps,targets);}
- assert(targets.every(enemy=>enemy.health===enemy.maxHealth-30),'Wave cannot pierce multiple enemies');
+ assert(targets.every(enemy=>enemy.health===enemy.maxHealth-36),'Wave cannot pierce multiple enemies');
  const cooldown=new Battle();cooldown.enemy.z=1;cooldown.enemy.superArmor=true;
- cooldown.launchWave(neutral);cooldown.updateWaves(.1);assert.equal(cooldown.enemy.health,cooldown.enemy.maxHealth-30);
- cooldown.launchWave(neutral);cooldown.time=.999;cooldown.updateWaves(.1);assert.equal(cooldown.enemy.health,cooldown.enemy.maxHealth-30);
- cooldown.launchWave(neutral);cooldown.time=1;cooldown.updateWaves(.1);assert.equal(cooldown.enemy.health,cooldown.enemy.maxHealth-60);
+ cooldown.launchWave(neutral);cooldown.updateWaves(.1);assert.equal(cooldown.enemy.health,cooldown.enemy.maxHealth-36);
+ cooldown.launchWave(neutral);cooldown.time=.999;cooldown.updateWaves(.1);assert.equal(cooldown.enemy.health,cooldown.enemy.maxHealth-36);
+ cooldown.launchWave(neutral);cooldown.time=1;cooldown.updateWaves(.1);assert.equal(cooldown.enemy.health,cooldown.enemy.maxHealth-72);
  const g=await gameFixture(fps);g.freezeEnemy=true;g.read('battle.enemy.z=30;battle.player.counterReady=true;battle.player.counterUntil=battle.time+3');
- g.mouse(0);assert.equal(g.read('activeGesture.name'),'CounterWave');assert.notEqual(g.read('actions.CounterWave'),g.read('actions.Attack4'));
- assert(g.until('battle.waves.length>0',2));assert.equal(g.read('battle.waves[0].damage'),30);
+ g.mouse(0);g.mouse(0,false);assert.equal(g.read('activeGesture.name'),'Charge');assert.notEqual(g.read('actions.CounterWave'),g.read('actions.Attack4'));
+ assert(g.until('battle.waves.length>0',2));assert.equal(g.read('battle.waves[0].damage'),36);
 }
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,1,.1,100);camera.position.set(0,1,5);camera.lookAt(0,.9,0);camera.updateMatrixWorld();
 const material=new THREE.MeshStandardMaterial({color:'white'}),wall=new THREE.Mesh(new THREE.BoxGeometry(2,3,.3),material);wall.position.set(0,1,2);scene.add(wall);

@@ -13,14 +13,14 @@ export class EnemyMove{
  defaultLifeDamage(){return NOT_APPLICABLE;}
 }
 export class AttackMove extends EnemyMove{
- constructor(options){super({lunge:0,impactLevel:1,startupResilience:1,...options});this.kind='melee';}
+ constructor(options){super({lunge:0,impactLevel:1,startupResilience:1,delivery:'melee',element:'normal',...options});this.kind='melee';}
  get windup(){return this.prepare+this.swing;}
  get dealsDamage(){return true;}
  defaultLifeDamage(power){return Math.round(power*this.motionMultiplier*100)/100;}
 }
-export class ChannelMove extends AttackMove{constructor(options){super(options);this.kind='channel';}}
+export class ChannelMove extends AttackMove{constructor(options){super({delivery:'ranged',...options});this.kind='channel';}}
 export class ProjectileMove extends AttackMove{
- constructor(options){super(options);this.kind='projectile';}
+ constructor(options){super({delivery:'ranged',...options});this.kind='projectile';}
 }
 class UtilityMove extends EnemyMove{
  get motionMultiplier(){return NOT_APPLICABLE;}
@@ -47,6 +47,26 @@ export class MovementMove extends UtilityMove{
  get halfAngle(){return NOT_APPLICABLE;}
  get heightMin(){return NOT_APPLICABLE;}
  get heightMax(){return NOT_APPLICABLE;}
+}
+export function retreatFlightProgress(enemy){
+ return Math.max(0,Math.min(1,(enemy.elapsed-enemy.telegraph)/Math.max(.001,enemy.swingDuration)));
+}
+export function retreatHopPose(enemy){
+ const hop=enemy.move?.retreatHop;
+ if(!hop)return null;
+ if(enemy.state==='windup'){
+  if(enemy.elapsed<enemy.telegraph){
+   const prep=enemy.elapsed/enemy.telegraph;
+   return {phase:.24*prep,lift:0,compression:hop.compression*prep*prep};
+  }
+  const u=retreatFlightProgress(enemy);
+  return {phase:.24+.60*u,lift:4*hop.height*u*(1-u),compression:hop.compression*(1-u)**4};
+ }
+ if(enemy.state==='recover'){
+  const u=Math.min(1,enemy.elapsed/Math.max(.001,hop.settle));
+  return {phase:.84+.16*u,lift:0,compression:hop.compression*Math.sin(Math.PI*u)};
+ }
+ return null;
 }
 export const isDamagingMove=move=>move instanceof EnemyMove?move.dealsDamage:Boolean(move)&&!['parry','buff','movement'].includes(move.kind);
 export const defaultLifeDamage=(move,power)=>move instanceof EnemyMove?move.defaultLifeDamage(power):isDamagingMove(move)?Math.round(power*move.motionMultiplier*100)/100:NOT_APPLICABLE;

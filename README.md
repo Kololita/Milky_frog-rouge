@@ -1,20 +1,21 @@
 # 奶蛙 · Milky Frog
 
-《奶蛙》是一款第三人称动作 Roguelike。你将操控一只会挥拳、翻滚和捧腹大笑的奶蛙，在十五层远征中选择路线、收集装备，并在旅程终点挑战武士。
+《奶蛙》是一款第三人称动作 Roguelike。你可以从九个职业中选择一只奶蛙，在十六层远征中探索路线、收集装备，用拳掌、闪避和专属大招挑战武士。
 
-**Windows x64 · v0.3.2**
+**Windows x64 · v0.4.0**
 
-[下载安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.2/Naiwa-0.3.2-Setup-x64.exe) · [下载免安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.3.2/Naiwa-0.3.2-Windows-x64.zip) · [查看更新说明](https://github.com/Kololita/Milky_frog-rouge/releases/tag/v0.3.2)
+[下载安装版](https://github.com/Kololita/Milky_frog-rouge/releases/download/v0.4.0/Naiwa-0.4.0-Setup-x64.exe) · [查看更新说明](https://github.com/Kololita/Milky_frog-rouge/releases/tag/v0.4.0)
 
 ## 你会玩到什么
 
 - **读招与反击**：用翻滚避开重击，抓准时机完美格挡获得金光，或绕到敌人背后摔投。拳掌连击、跳跃下砸和蓄力光球适合不同的交战距离。
+- **九个职业**：根据各职业的大招、抗性和专属装配台选择打法。火龙适合近身连击，水龙能用护盾稳住战局，电龙可用闪电链同时牵制多个敌人。
 - **一局一套配装**：从战利品中选装备，把不同形状的拳套、装甲、护符和技能拼进装配台。遇到休息点，可以补充血瓶、升级装配台或改造装备。
 - **各有打法的敌人**：在锅炉房利用冷却水对付灰烬司炉官，在石台躲避石槌守卫的拔锤地裂，在芦苇地观察武士的挥刀节奏。
 
 ## 开始游玩
 
-安装版运行 EXE 后按提示安装。免安装版解压 ZIP 后打开「奶蛙.exe」。第一次玩可以从主菜单进入新手教程，也可以到练习场试招，或在竞技场直接挑战首领。
+运行 EXE 后按提示安装。第一次玩可以从主菜单进入新手教程，也可以到练习场试招，或在竞技场直接挑战首领。
 
 | 默认按键 | 操作 |
 | --- | --- |

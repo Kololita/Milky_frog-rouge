@@ -310,7 +310,7 @@ export function createRunUI(doc,{eventState=()=>({}),applyEvent=()=>{},onNew=()=
  exit(){api.abandon();onExit();},
  tick(battle){
   if(run?.status!=='battle')return;
-  if(battle.player.health>0&&(!battle.allDefeated||battle.backThrow))return;
+  if(battle.player.health>0&&(!battle.allDefeated||battle.backThrow||battle.earthRoll||battle.earthExit))return;
   const won=battle.player.health>0;
   run.finish(won,battle.enemies?.length??1,{healthDamaged:battle.tookEnemyHealthDamage});checkpoint();onMap();
   updateToolbar();
