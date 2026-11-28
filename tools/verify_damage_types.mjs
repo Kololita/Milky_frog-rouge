@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {AdditiveBlending,Object3D,Scene} from 'three';
 import {Battle} from '../src/battle.js';
 import {AIR_SLAM,AirSlam,ATTACK_RATE,attackCanFinish,attackRate,attackRecoveryGap,PALM_RELEASE_CLIP_TIME} from '../src/combat.js';
 import {activeBuffs} from '../src/buff-status.js';
@@ -13,6 +14,7 @@ import {EQUIPMENT_PASSIVES} from '../src/equipment-passives.js';
 import {MONSTER_STATS} from '../src/monster-catalog.js';
 import {SAMURAI_MOVES,samuraiSequence} from '../src/samurai.js';
 import {updateEnemyProjectiles} from '../src/enemy-projectiles.js';
+import {createWeatherEffects} from '../src/weather-effects.js';
 
 const near=(value,expected)=>assert(Math.abs(value-expected)<1e-8,JSON.stringify([value,expected]));
  near(combineResistances({fire:20},{fire:20,water:15}).fire,36);
@@ -279,12 +281,25 @@ const chainBattle=new Battle();
 chainBattle.applyEquipment({ultimate:'electric'});
 Object.assign(chainBattle.enemy,{x:0,z:2,health:10000,act(){}});
 chainBattle.player.energy=40;
+const chainScene=new Scene(),chainHand=new Object3D();
+chainScene.add(chainHand);
+const weather=createWeatherEffects(chainScene);
+const weatherRoot=chainScene.getObjectByName('weather-ultimate-effects');
+const chainCore=weatherRoot.children.find(mesh=>mesh.isInstancedMesh);
+const chainLine=weatherRoot.children.find(mesh=>mesh.isLineSegments);
+weatherRoot.traverse(object=>assert(!object.isLight,'Weather visuals must not light the scene'));
+for(const mesh of [chainCore,chainLine]){
+ assert.equal(mesh.material.blending,AdditiveBlending);
+ assert(!mesh.material.depthWrite&&!mesh.castShadow&&!mesh.receiveShadow);
+}
 assert(chainBattle.beginUltimate(pose));
 const chainTick=()=>{
  chainBattle.player.energy=40;
  chainBattle.update(.05,pose);
  chainBattle.update(.05,pose);
- return chainBattle.takeEvents().find(event=>event.type==='enemyHit')?.damage;
+ const events=chainBattle.takeEvents();
+ weather.update(chainBattle.electricChain,chainBattle.time,events,chainHand);
+ return events.find(event=>event.type==='enemyHit')?.damage;
 };
 const chain=chainBattle.electricChain;
 const power=()=>{
@@ -293,18 +308,26 @@ const power=()=>{
 };
 const [initial,double,fivefold,fifteenfold]=power();
 assert.equal(chainTick(),initial);
+assert(chainLine.visible&&chainCore.visible);
+let segments=chainCore.count;
 for(const next of [double,fivefold,fifteenfold]){
  for(let i=0;i<29;i++)chainTick();
  assert.equal(chainTick(),next);
+ assert(chainCore.count>segments,'Higher stages must add visible branches');
+ segments=chainCore.count;
 }
 for(let i=0;i<31;i++)assert.equal(chainTick(),fifteenfold);
 chainBattle.enemy.z=8;assert.equal(chainTick(),undefined);
+assert(!chainLine.visible&&!chainCore.visible);
 chainBattle.enemy.z=2;assert.equal(chainTick(),initial);
+assert(chainLine.visible&&chainCore.visible);
 chainBattle.strikePlayer({...pose,invulnerable:true},attack,0,origin);
 assert(chainBattle.electricChain,'A dodged attack should leave the chain active');
 chainBattle.player.shield=20;
 chainBattle.strikePlayer(pose,attack,0,origin);
 assert.equal(chainBattle.electricChain,null,'Level-zero hits stop the chain even when the shield absorbs all damage');
+weather.update(chainBattle.electricChain,chainBattle.time,[],chainHand);
+assert(weatherRoot.children.every(mesh=>!mesh.visible));
 assert.equal(chainBattle.player.health,chainBattle.maxHealth);
 assert(chainBattle.beginUltimate(pose));
 chainBattle.beginAttack('Attack1');

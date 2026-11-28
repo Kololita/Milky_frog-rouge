@@ -42,16 +42,17 @@ export function createWeatherEffects(scene){
  const boltGeometry=new THREE.BufferGeometry();
  const positions=new THREE.BufferAttribute(new Float32Array(48*segments*2*3),3).setUsage(THREE.DynamicDrawUsage);
  boltGeometry.setAttribute('position',positions);
- const bolts=new THREE.LineSegments(boltGeometry,new THREE.LineBasicMaterial({
-  color:'#f2e8ff',transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,
- }));
+ const additive={transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false};
+ const bolts=new THREE.LineSegments(boltGeometry,new THREE.LineBasicMaterial({color:'#f2e8ff',...additive}));
  bolts.frustumCulled=false;bolts.visible=false;root.add(bolts);
- const handLight=new THREE.Mesh(new THREE.IcosahedronGeometry(.095,1),new THREE.MeshBasicMaterial({
-  color:'#d9d1ff',transparent:true,opacity:.83,depthWrite:false,blending:THREE.AdditiveBlending,
+ const handGlow=new THREE.Mesh(new THREE.IcosahedronGeometry(.095,1),new THREE.MeshBasicMaterial({
+  color:'#d9d1ff',opacity:.83,...additive,
  }));
- handLight.visible=false;root.add(handLight);
+ handGlow.visible=false;root.add(handGlow);
  const chainTube=new THREE.InstancedMesh(new THREE.CylinderGeometry(1,1,1,6),
-  new THREE.MeshBasicMaterial({toneMapped:false}),positions.count/2);
+  new THREE.MeshBasicMaterial({opacity:.8,...additive}),positions.count/2);
+ chainTube.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+ chainTube.count=0;
  chainTube.frustumCulled=false;chainTube.visible=false;root.add(chainTube);
  const colors=['#ffffff','#ffe22d','#ff8c21','#ff3626'].map(value=>new THREE.Color(value));
  const chainColor=new THREE.Color(),boltWidth=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
@@ -74,7 +75,7 @@ export function createWeatherEffects(scene){
   }
  }
  return {clear(){
-  strike=null;edge.visible=rain.visible=bolts.visible=handLight.visible=chainTube.visible=false;
+  strike=null;edge.visible=rain.visible=bolts.visible=handGlow.visible=chainTube.visible=false;
  },update(effect,time,events,hand){
   const raining=effect?.id==='rain',target=effect?.id==='thunder'?effect.target:null;
   rain.visible=raining;edge.visible=raining||Boolean(target?.alive);
@@ -92,18 +93,19 @@ export function createWeatherEffects(scene){
   vertices=0;
   const electric=effect?.id==='electric';
   const linkedTime=electric&&Number.isFinite(effect.linkedAt)?Math.max(0,time-effect.linkedAt):0;
-  const intensity=electric?electricChainStage(effect.stats,linkedTime):0;
+  const intensity=electric?Math.min(colors.length-1,electricChainStage(effect.stats,linkedTime)):0;
   chainColor.copy(colors[intensity]);
-  handLight.visible=electric&&Boolean(hand);
-  if(handLight.visible){
-   hand.getWorldPosition(start);handLight.position.copy(start);
-   handLight.material.color.copy(chainColor);
-   handLight.scale.setScalar(.85+intensity*.38+.26*Math.sin(time*(30+intensity*8)));
-   effect.links.forEach((actor,index)=>{
+  handGlow.visible=electric&&Boolean(hand);
+  if(handGlow.visible){
+   hand.getWorldPosition(start);handGlow.position.copy(start);
+   handGlow.material.color.copy(chainColor);
+   handGlow.scale.setScalar(.85+intensity*.38+.26*Math.sin(time*(30+intensity*8)));
+   for(let index=0;index<effect.links.length&&vertices<positions.count;index++){
+    const actor=effect.links[index];
     end.set(actor.x,(actor.height??0)+actor.bodyHeight*.57,actor.z);
     source.copy(start);destination.copy(end);
     addBolt(time,index,1+intensity*.42);
-    for(let branch=0;branch<band;branch++){
+    for(let branch=0;branch<intensity;branch++){
      const angle=index*3.55+branch*2.1+Math.floor(time*18)*.72;
      start.copy(source).lerp(destination,.23+branch*.14);
      end.copy(source).lerp(destination,.59+branch*.10);
@@ -112,7 +114,7 @@ export function createWeatherEffects(scene){
      addBolt(time,index*4+branch+1,.66);
     }
     start.copy(destination);
-   });
+   }
   }
   const thickness=.006+intensity*.0075;
   chainTube.count=vertices/2;
@@ -127,7 +129,9 @@ export function createWeatherEffects(scene){
     tubePoint.quaternion.setFromUnitVectors(up,boltWidth.normalize());
     tubePoint.updateMatrix();chainTube.setMatrixAt(i,tubePoint.matrix);
    }
-   chainTube.instanceMatrix.needsUpdate=true;
+   const matrices=chainTube.instanceMatrix;
+   matrices.clearUpdateRanges();matrices.addUpdateRange(0,chainTube.count*matrices.itemSize);
+   matrices.needsUpdate=true;
   }
   const flash=strike&&time-strike.at<.24;
   if(flash){
@@ -137,7 +141,10 @@ export function createWeatherEffects(scene){
   bolts.visible=vertices>0;
   bolts.material.color.copy(electric?chainColor:colors[0]);
   if(!electric)bolts.material.color.set('#f2e8ff');
-  if(vertices){positions.needsUpdate=true;boltGeometry.setDrawRange(0,vertices);}
+  if(vertices){
+   positions.clearUpdateRanges();positions.addUpdateRange(0,vertices*positions.itemSize);
+   positions.needsUpdate=true;boltGeometry.setDrawRange(0,vertices);
+  }
   bolts.material.opacity=flash?Math.max(.3,1-(time-strike.at)/.24):.94;
  }};
 }
